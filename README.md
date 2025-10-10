@@ -1,9 +1,10 @@
 "# tecnicentroJrProjects" 
 
 formato para commits:
-feat(auth): agregar login con JWT
-fix(api): corregir error 500 al crear usuario
-refactor(core): optimizar validaciones
-docs(readme): actualizar instrucciones de instalación
-test(user): agregar tests unitarios de creación
-chore(deps): actualizar dependencias
+feat → nueva funcionalidad
+fix → corrección de errores
+docs → solo cambios en documentación
+style → cambios de formato (espacios, comas, etc.) sin afectar código
+refactor → cambios en el código sin cambiar comportamiento
+test → agregar o modificar pruebas
+chore → tareas menores o mantenimiento

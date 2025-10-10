@@ -1,0 +1,201 @@
+import { BadRequestException, Injectable, UnauthorizedException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { UsersService } from '../users/users.service';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma.service';
+import { Role } from '../common/enums/role.enum';
+import { MailService } from '../mail/mail.service';
+import { randomBytes } from 'crypto';
+import { Request } from 'express';
+import { TokensDto } from './dto/tokens.dto';
+import { JwtPayload, TokenResponse } from './types/auth.types';
+import { Prisma, RefreshToken, User } from '@prisma/client';
+import { EmailValidatorService } from '../common/validators/email-validator.service';
+import { SchedulerRegistry } from '@nestjs/schedule';
+
+@Injectable()
+export class AuthService {
+    constructor(
+        private usersService: UsersService,
+        private jwtService: JwtService,
+        private readonly prisma: PrismaService,
+        private readonly mailService: MailService,
+        private readonly emailValidator: EmailValidatorService,
+        private schedulerRegistry: SchedulerRegistry
+    ) {}
+
+    async validateUser(email: string, password: string) {
+        console.log(`Validando usuario: ${email}`);
+        
+        const user = await this.usersService.findByEmail(email);
+        console.log('Usuario encontrado:', user ? 'Sí' : 'No');
+        
+        if (!user) {
+            console.log('Usuario no encontrado en la base de datos');
+            throw new UnauthorizedException('Credenciales inválidas');
+        }
+
+        console.log('Verificando contraseña...');
+        const isMatch = await bcrypt.compare(password, user.password);
+        console.log('Contraseña coincide:', isMatch);
+        
+        if (!isMatch) {
+            console.log('Contraseña incorrecta');
+            throw new UnauthorizedException('Credenciales inválidas');
+        }
+
+        console.log('Usuario verificado:', user.verified);
+        if (!user.verified) {
+            console.log('El usuario no ha verificado su correo');
+            throw new UnauthorizedException('Por favor verifica tu correo electrónico antes de iniciar sesión');
+        }
+
+        console.log('Usuario validado exitosamente');
+        return user;
+    }
+
+    private async generateTokens(userId: string, email: string, role: Role, ipAddress: string): Promise<TokenResponse> {
+        console.log('Generando tokens para usuario:', { userId, email, role });
+        
+        try {
+            // 1. Generar access token
+            const accessToken = await this.jwtService.signAsync(
+                { sub: userId, email, role },
+                { expiresIn: '20m' } // 20 minutes
+            );
+            console.log('Access token generado');
+
+            // 2. Generar refresh token
+            const refreshToken = randomBytes(40).toString('hex');
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 7); // 7 días
+            const now = new Date();
+
+            console.log('Validando usuario antes de crear refresh token');
+            // Validar que el usuario existe
+            const userExists = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true }
+            });
+
+            if (!userExists) {
+                console.error('Usuario no encontrado al generar tokens:', userId);
+                throw new Error('Usuario no encontrado');
+            }
+
+            console.log('Creando refresh token en la base de datos');
+            // Crear refresh token usando el cliente Prisma
+            await this.prisma.refreshToken.create({
+                data: {
+                    token: refreshToken,
+                    userId: userId,
+                    expiresAt: expiresAt,
+                    revoked: false
+                }
+            });
+
+            console.log('Refresh token creado exitosamente');
+
+                accessToken,
+                refreshToken,
+                expiresIn: 20 * 60, // 20 minutos en segundos
+            };
+        } catch (error) {
+            console.error('Error en el registro:', error);
+            if (error instanceof ConflictException || error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Error al registrar el usuario');
+        }
+    }
+
+    private async generateAccessToken(userId: string, email: string, role: Role) {
+        return this.jwtService.signAsync(
+{{ ... }}
+            // Crear usuario
+            const userData: Prisma.UserCreateInput = {
+                email,
+                password: hashedPassword,
+                name,
+                username,
+                phone: phone || 'sin_telefono',
+                birthdate: birthdate ? new Date(birthdate) : null,
+                language,
+                timezone,
+                verified: false,
+                verifyToken,
+                verifyTokenExpires,
+                role: Role.USER,
+                status: 'ACTIVE',
+            };
+            const newUser = await this.prisma.user.create({ data: userData });
+
+            // Enviar correo de verificación
+            if (newUser.verifyToken) {
+                await this.mailService.sendVerificationEmail(newUser.email, newUser.verifyToken, newUser.name);
+            }
+            // Re-lanzar el error para que se maneje más arriba
+            throw error;
+        }
+    }
+
+    async verifyEmail(token: string) {
+        const user = await this.prisma.user.findFirst({
+            where: { verifyToken: token, verifyTokenExpires: { gt: new Date() } },
+        });
+
+        if (!user) {
+            throw new BadRequestException('Token inválido o expirado');
+        }
+
+        return this.prisma.user.update({
+            where: { id: user.id },
+            data: { verified: true, verifyToken: null, verifyTokenExpires: null },
+        });
+    }
+
+    // Funcion para manejar el email en una solicitu de cambio de "Olvide mi Contraseña".
+    async requestPasswordReset(email: string): Promise<boolean> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {      
+      return true;
+    }
+
+    // Generar token y expiración
+    const token = crypto.randomUUID();
+    const expires = new Date();
+    expires.setMinutes(expires.getMinutes() + 30); // expira en 30 min
+
+    // Guardar token en DataBase
+    await this.usersService.updatePasswordResetToken(user.id, token, expires);
+
+    // Delegar envío al MailService
+    await this.mailService.sendPasswordResetEmail(user.email, token);
+
+    return true;
+    }
+
+    async resetPassword(token: string, newPassword: string) {
+    // 1. Buscar usuario con token
+    const user = await this.usersService.findByResetToken(token);
+    if (!user) throw new BadRequestException('Token inválido');
+
+    // 2. Verificar expiración
+    if (!user.passwordResetTokenExpires || user.passwordResetTokenExpires < new Date()) {
+        throw new BadRequestException('Token expirado');
+    }
+
+    // 3. Hashear nueva contraseña
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 4. Actualizar usuario
+    await this.usersService.update(user.id, {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        passwordResetToken: null,
+        passwordResetTokenExpires: null,
+    });
+
+    return true;
+    }
+}

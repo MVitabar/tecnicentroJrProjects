@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { Role } from '@prisma/client';
 
@@ -17,21 +18,43 @@ export class RolesGuard implements CanActivate {
         return true;
         }
 
-        // Obtener el usuario del request
         const request = context.switchToHttp().getRequest();
-        const user = request.user;  // Debería ser { id: string, email: string, role: Role }
-
-        console.log('Usuario en request:', user);
-
-        // Verificar si el usuario está autenticado y tiene un rol
-        if (!user || !user.role) {
-            console.log('Usuario no autenticado o sin rol');
-            throw new ForbiddenException('No tienes permisos para realizar esta acción');
+        
+        // Extraer el token del header de autorización
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+            throw new ForbiddenException('No se proporcionó token de autenticación');
         }
 
-        // Verificar si el usuario tiene alguno de los roles requeridos
-        const hasRole = requiredRoles.some((role) => user.role === role);
-        console.log(`Usuario con rol ${user.role} requiere alguno de:`, requiredRoles, '->', hasRole ? 'PERMITIDO' : 'DENEGADO');
+        // El formato del header es: Bearer <token>
+        const token = authHeader.split(' ')[1];
+        if (!token) {
+            throw new ForbiddenException('Formato de token inválido');
+        }
+
+        // Decodificar el token JWT
+        let payload;
+        try {
+            const jwtService = new JwtService({
+                secret: process.env.JWT_SECRET || 'superSecretKey',
+            });
+            payload = jwtService.verify(token);
+        } catch (error) {
+            console.error('Error al verificar el token:', error);
+            throw new ForbiddenException('Token inválido o expirado');
+        }
+
+        // Extraer el rol del payload
+        const userRole = payload.role;
+        console.log('Roles requeridos:', requiredRoles);
+        console.log('Rol del usuario:', userRole);
+
+        if (!userRole) {
+            throw new ForbiddenException('El token no contiene información de roles');
+        }
+
+        // Verificar si el usuario tiene al menos uno de los roles requeridos
+        const hasRole = requiredRoles.some((role) => userRole === role);
         
         if (!hasRole) {
             throw new ForbiddenException(

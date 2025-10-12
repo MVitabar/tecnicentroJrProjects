@@ -36,10 +36,13 @@ import { UsersService } from 'src/users/users.service';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
+import { Logger } from '@nestjs/common';
 
 @ApiTags('Autenticación')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
@@ -193,6 +196,64 @@ export class AuthController {
         throw error;
       }
       console.error('Error inesperado en login:', error);
+      throw new UnauthorizedException('Error al iniciar sesión');
+    }
+  }
+
+  @Post('login/username')
+  @ApiOperation({
+    summary: 'Iniciar sesión con nombre de usuario',
+    description: 'Autentica un usuario regular (ROLE_USER) usando nombre de usuario y contraseña',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Inicio de sesión exitoso',
+    type: TokensDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Credenciales inválidas o cuenta no verificada',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', example: 'usuario123' },
+        password: { type: 'string', format: 'password', example: 'contraseñaSegura123' },
+      },
+      required: ['username', 'password'],
+    },
+  })
+  async loginWithUsername(
+    @Req() req,
+    @Body('username') username: string,
+    @Body('password') password: string,
+  ) {
+    this.logger.log(`Iniciando proceso de login para usuario: ${username}`);
+    try {
+      this.logger.debug('Validando credenciales...');
+      const user = await this.authService.validateUserByUsername(username, password);
+      
+      this.logger.debug('Usuario validado, obteniendo dirección IP...');
+      const ipAddress =
+        req.ip ||
+        req.headers['x-forwarded-for'] ||
+        req.connection.remoteAddress;
+      
+      this.logger.debug(`IP detectada: ${ipAddress}`);
+      this.logger.debug('Generando tokens...');
+      
+      const tokens = await this.authService.login(user, ipAddress);
+      this.logger.log('Login exitoso');
+      
+      return tokens;
+    } catch (error) {
+      this.logger.error(`Error en login con usuario: ${error.message}`, error.stack);
+      if (error instanceof UnauthorizedException) {
+        this.logger.warn(`Error de autenticación: ${error.message}`);
+        throw error;
+      }
+      this.logger.error('Error inesperado en login con usuario:', error);
       throw new UnauthorizedException('Error al iniciar sesión');
     }
   }

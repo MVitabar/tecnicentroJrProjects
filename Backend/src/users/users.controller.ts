@@ -8,20 +8,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserResponseDto } from 'src/auth/dto/create-user-response.dto';
-
-// Función para generar el nombre de usuario automático
-const generateUsername = (): string => {
-  const now = new Date();
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0'),
-    String(now.getSeconds()).padStart(2, '0')
-  ].join('');
-  return `user${timestamp}`;
-};
+import { generateUsername } from 'src/common/utility/usernameGenerator';
 
 @ApiTags('Users')
 @Controller('users')
@@ -113,6 +100,8 @@ export class UsersController {
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ 
     summary: 'Actualizar usuario',
     description: 'Actualiza los datos de un usuario existente. Requiere rol de ADMIN'
@@ -134,6 +123,8 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ 
     summary: 'Eliminar usuario',
     description: 'Elimina un usuario del sistema. Requiere rol de ADMIN'

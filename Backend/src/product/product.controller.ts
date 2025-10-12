@@ -35,6 +35,9 @@ import {
   ProductListResponseDto,
   CreatedByDto 
 } from './dto/product-response.dto';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('Productos')
 @Controller('products')
@@ -51,6 +54,8 @@ export class ProductController {
    * @returns El producto creado
    */
   @Post('create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
     summary: 'Crear un nuevo producto',
@@ -121,15 +126,25 @@ export class ProductController {
    * @returns Lista paginada de productos y total de registros
    */
   @Get('all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ 
     summary: 'Obtener todos los productos',
-    description: 'Retorna una lista paginada de todos los productos disponibles en el sistema.'
+    description: 'Retorna una lista paginada de todos los productos disponibles en el sistema. Accesible para usuarios autenticados con rol ADMIN o USER.'
   })
   @ApiQuery({ 
     name: 'page', 
     required: false, 
     type: Number, 
     description: 'Número de página (por defecto: 1)' 
+  })
+  @ApiResponse({ 
+    status: HttpStatus.UNAUTHORIZED, 
+    description: 'No autorizado. Se requiere autenticación'
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'No tiene permisos para acceder a este recurso. Se requiere rol de ADMIN o USER.'
   })
   @ApiQuery({ 
     name: 'limit', 
@@ -186,15 +201,27 @@ export class ProductController {
   }
 
   /**
-   * Obtiene los productos del usuario autenticado
-   * @param req - Objeto de solicitud que contiene el token JWT
+   * Obtiene los productos creados por un usuario específico
+   * @param userId - ID del usuario cuyos productos se desean consultar
    * @param paginationDto - Parámetros de paginación y búsqueda
    * @returns Lista paginada de productos del usuario y total de registros
    */
-  @Get('me')
+  @Get('user/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ 
-    summary: 'Obtener mis productos',
-    description: 'Retorna los productos creados por el usuario autenticado.'
+    summary: 'Obtener productos creados por ID de usuario',
+    description: 'Retorna los productos creados por un usuario específico. Solo accesible para administradores.'
+  })
+  @ApiBearerAuth('JWT')
+  @ApiParam({
+    name: 'userId',
+    description: 'ID del usuario cuyos productos se desean consultar',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({ 
+    status: HttpStatus.FORBIDDEN, 
+    description: 'No tiene permisos para acceder a este recurso. Se requiere rol de ADMIN.'
   })
   @ApiQuery({ 
     name: 'page', 
@@ -217,11 +244,14 @@ export class ProductController {
     status: HttpStatus.UNAUTHORIZED, 
     description: 'No autorizado. Se requiere autenticación'
   })
-  async findMyProducts(
-    @Request() req: any,
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'No se encontró el usuario con el ID especificado',
+  })
+  async findUserProducts(
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Query() paginationDto: PaginationDto
   ): Promise<ProductListResponseDto> {
-    const userId = req.user.userId;
     const [products, total] = await Promise.all([
       this.productService.findByUserId(userId, paginationDto),
       this.productService.count({ createdById: userId })
@@ -229,7 +259,7 @@ export class ProductController {
     
     // Mapear los productos al tipo ProductResponseDto
     const productDtos: ProductResponseDto[] = products.map(product => {
-      const productData = product as any; // Usamos 'any' temporalmente para acceder a las propiedades
+      const productData = product as any;
       const dto: ProductResponseDto = {
         id: productData.id,
         name: productData.name,
@@ -262,23 +292,34 @@ export class ProductController {
    * @returns El producto solicitado
    */
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ 
     summary: 'Obtener producto por ID',
-    description: 'Retorna los detalles de un producto específico por su ID.'
+    description: 'Retorna los detalles de un producto específico por su ID. Accesible para usuarios autenticados con rol ADMIN o USER.'
   })
+  @ApiBearerAuth('JWT')
   @ApiParam({
     name: 'id',
-    description: 'ID único del producto',
-    example: '123e4567-e89b-12d3-a456-426614174000'
+    description: 'ID único del producto a consultar',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'No autorizado. Se requiere autenticación',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'No tiene permisos para acceder a este recurso. Se requiere rol de ADMIN o USER.',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'No se encontró el producto con el ID especificado',
   })
   @ApiResponse({ 
     status: HttpStatus.OK, 
     description: 'Producto encontrado exitosamente',
     type: ProductResponseDto
-  })
-  @ApiResponse({ 
-    status: HttpStatus.NOT_FOUND, 
-    description: 'No se encontró el producto con el ID especificado'
   })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string

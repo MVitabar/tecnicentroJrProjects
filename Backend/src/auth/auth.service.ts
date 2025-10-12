@@ -47,6 +47,30 @@ export class AuthService {
     return user;
   }
 
+  async validateUserByUsername(username: string, password: string) {
+    const user = await this.usersService.findByUsername(username);
+    
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // Verificar que el usuario tenga el rol USER
+    if (user.role !== Role.USER) {
+      throw new UnauthorizedException('Este método de autenticación es solo para usuarios regulares');
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (!isMatch) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // No se requiere verificación de correo electrónico
+    // para este método de autenticación
+
+    return user;
+  }
+
   async register(
     email: string,
     password: string,

@@ -18,7 +18,7 @@ export class MailService {
       },
     });
 
-    this.defaultFrom = `"${process.env.EMAIL_FROM_NAME || 'Nuestra Aplicación'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`;
+    this.defaultFrom = `"${process.env.EMAIL_FROM_NAME || 'Confirmacion de Correo'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`;
   }
 
   async sendVerificationEmail(to: string, token: string | null, name: string = 'Usuario') {

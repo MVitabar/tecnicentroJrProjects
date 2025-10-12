@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import * as bcrypt from 'bcrypt';
-import { User } from '@prisma/client';
+import { User, Role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -26,35 +26,72 @@ export class UsersService {
      *    - verifyTokenExpires: fecha de expiración del token (24 horas)
      * 6. Retorna el usuario recién creado.
      */
-    async createUser(email: string, password: string, name: string, username: string, phone?: string, birthdate?: Date, language?: string, timezone?: string,) {
-        const existing = await this.prisma.user.findUnique({ where: { email } });
+    async createUser(email: string, password: string, name: string, username: string, phone?: string, birthdate?: Date, language?: string, timezone?: string) {
+        return this.create({
+            email,
+            password,
+            name,
+            username,
+            phone,
+            birthdate,
+            language,
+            timezone,
+            role: Role.USER
+        });
+    }
+
+    async create(userData: {
+        email: string;
+        password: string;
+        name: string;
+        username: string;
+        phone?: string;
+        birthdate?: Date;
+        language?: string;
+        timezone?: string;
+        role?: Role;
+    }) {
+        const { email, password, name, username, phone, birthdate, language, timezone, role } = userData;
+        
+        const existing = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email },
+                    { username },
+                    ...(phone ? [{ phone }] : [])
+                ]
+            }
+        });
+
         if (existing) {
-            throw new BadRequestException('El email ya está registrado');
+            if (existing.email === email) {
+                throw new BadRequestException('El correo electrónico ya está registrado');
+            }
+            if (existing.username === username) {
+                throw new BadRequestException('El nombre de usuario ya está en uso');
+            }
+            if (phone && existing.phone === phone) {
+                throw new BadRequestException('El número de teléfono ya está registrado');
+            }
         }
 
         // Validar contraseña
         const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[*@!#%&?])[A-Za-z\d*@!#%&?]{6,}$/;
-        // - al menos 1 mayúscula
-        // - al menos 1 número
-        // - al menos 1 caracter especial (*, @, !, #, %, &, ?)
-        // - mínimo 6 caracteres (puedes ajustar)
         if (!passwordRegex.test(password)) {
             throw new BadRequestException(
                 'La contraseña debe tener al menos una mayúscula, un número y un caracter especial (*,@,!,#,%,&,?)'
             );
         }
 
-        // Asignar defaults automáticos si no se enviaron
-        const finalLanguage = language || 'indeterminado';       // default neutral
-        const finalTimezone = timezone || 'UTC';                 // default UTC
+        // Asignar defaults
+        const finalLanguage = language || 'indeterminado';
+        const finalTimezone = timezone || 'UTC';
+        const finalRole = role || Role.USER;
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        const RegisterToken = crypto.randomUUID();
-
-        if (!uuidRegex.test(RegisterToken)) {
-            throw new Error("UUID inválido");
-        }
+        const verifyToken = this.generateToken();
+        const verifyTokenExpires = new Date();
+        verifyTokenExpires.setHours(verifyTokenExpires.getHours() + 24);
 
         return this.prisma.user.create({
             data: {
@@ -62,14 +99,33 @@ export class UsersService {
                 password: hashedPassword,
                 name,
                 username,
-                phone,
+                phone: phone || 'sin_telefono',
                 birthdate,
                 language: finalLanguage,
                 timezone: finalTimezone,
-                verifyToken: RegisterToken,
-                verifyTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                role: finalRole,
+                verifyToken,
+                verifyTokenExpires,
+                lastLoginAt: new Date(),
             },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                phone: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
+                lastLoginAt: true,
+                verified: true
+            }
         });
+    }
+
+    private generateToken(): string {
+        return Math.random().toString(36).substring(2, 15) + 
+               Math.random().toString(36).substring(2, 15);
     }
 
     async updatePasswordResetToken(userId: string, token: string, expires: Date) {

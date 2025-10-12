@@ -58,7 +58,7 @@ export class TemplateService {
       this.logger.debug(`Renderizando plantilla: ${templateName}`);
       const template = await this.getCompiledTemplate(templateName);
       const defaultContext = {
-        appName: process.env.APP_NAME || 'Nuestra Aplicación',
+        appName: process.env.APP_NAME || 'Confirmacion de Correo',
         currentYear: new Date().getFullYear(),
         ...context
       };

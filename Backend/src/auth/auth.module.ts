@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma.service';
 import { MailModule } from '../mail/mail.module';
 import { JwtStrategy } from './jwt.strategy';
 import { EmailValidatorService } from '../common/validators/email-validator.service';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -31,9 +32,10 @@ import { EmailValidatorService } from '../common/validators/email-validator.serv
     AuthService,
     PrismaService,
     JwtStrategy,
-    EmailValidatorService
+    EmailValidatorService,
+    RolesGuard
   ],
   controllers: [AuthController],
-  exports: [JwtStrategy, PassportModule],
+  exports: [JwtStrategy, PassportModule, RolesGuard],
 })
 export class AuthModule {}

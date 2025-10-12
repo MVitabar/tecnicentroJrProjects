@@ -103,7 +103,7 @@ export class AuthService {
         verified: false,
         verifyToken,
         verifyTokenExpires,
-        role: Role.USER,
+        role: Role.ADMIN,
         status: 'ACTIVE' as const,
       };
 

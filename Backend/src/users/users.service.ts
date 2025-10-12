@@ -144,6 +144,9 @@ export class UsersService {
     }
 
     async findByEmail(email: string) {
+        if (!email) {
+            throw new BadRequestException('El correo electrónico es requerido');
+        }
         return this.prisma.user.findUnique({ where: { email } });
     }
 
@@ -185,12 +188,30 @@ export class UsersService {
     }
 
     async updatePassword(userId: string, newPassword: string) {
-    return this.prisma.user.update({
-        where: { id: userId },
-        data: {
-        password: newPassword,
-        passwordChangedAt: new Date(),
-        },
-    });
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: {
+            password: newPassword,
+            passwordChangedAt: new Date(),
+            },
+        });
+    }
+
+    async findAll() {
+        return this.prisma.user.findMany({
+            select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            phone: true,
+            createdAt: true,
+            updatedAt: true,
+            // Excluir campos sensibles como password, passwordResetToken, etc.
+            },
+            orderBy: {
+            createdAt: 'desc', // Opcional: ordenar por fecha de creación
+            },
+        });
     }
 }

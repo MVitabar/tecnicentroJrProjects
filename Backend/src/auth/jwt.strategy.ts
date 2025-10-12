@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, StrategyOptions } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -31,9 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     
     // Retornar los datos del usuario que estarán disponibles en req.user
     return { 
-      userId: payload.sub, 
+      id: payload.sub, 
       email: payload.email, 
-      role: payload.role 
+      role: payload.role as Role
     };
   }
 }

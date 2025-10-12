@@ -42,6 +42,61 @@ model User {
   passwordResetToken        String?
   passwordResetTokenExpires DateTime?
   refreshTokens             RefreshToken[]
+
+  // Relaciones inversas
+  products                  Product[]      // Productos creados por el usuario
+  sales                     Sale[]         // Ventas realizadas por el usuario
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  stock       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Relación inversa
+  sales       Sale[]   // Ventas relacionadas con este producto
+}
+
+model Sale {
+  id          String     @id @default(uuid())
+  productId   String
+  userId      String
+  quantity    Int        @default(1)
+  totalAmount Float
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  status      SaleStatus @default(COMPLETED)
+
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+enum SaleStatus {
+  COMPLETED
+  ANNULLED
+}
+
+model Service {
+  id          String        @id @default(uuid())
+  type        ServiceType   @default(REPAIR)
+  description String
+  price       Float
+  paid        Boolean       @default(false)
+  photoUrls   String[]      @default([])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum ServiceType {
+  REPAIR
+  WARRANTY
 }
 
 enum Role {

@@ -203,6 +203,19 @@ export class UsersService {
         });
     }
 
+    async findOne(id: string) {
+        return this.prisma.user.findUnique({
+            where: { id },
+        });
+    }
+
+    async updateUser(id: string, updateUserDto: any) {
+        return this.prisma.user.update({
+            where: { id },
+            data: updateUserDto,
+        });
+    }
+
     async findAll() {
         return this.prisma.user.findMany({
             select: {

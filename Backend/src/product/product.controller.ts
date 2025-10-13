@@ -361,6 +361,8 @@ export class ProductController {
    * @returns El producto actualizado
    */
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ 
     summary: 'Actualizar un producto',
     description: 'Actualiza los datos de un producto existente. Solo el propietario puede actualizar el producto.'
@@ -443,6 +445,8 @@ export class ProductController {
    * @param req - Objeto de solicitud que contiene el token JWT
    */
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ 
     summary: 'Eliminar un producto',

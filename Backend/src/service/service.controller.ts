@@ -13,8 +13,16 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  UseInterceptors,
+  UploadedFiles,
+  Logger,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { v4 as uuidv4 } from 'uuid';
+import * as path from 'path';
+import { supabase } from '../supabase.client';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ServiceType } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -42,9 +50,31 @@ export class ServiceController {
    */
   @Post()
   @Roles(Role.ADMIN, Role.USER)
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 5 }]))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Crear un nuevo servicio',
-    description: 'Crea un nuevo servicio en el sistema. Accesible para ADMIN y USER.'
+    description: 'Crea un nuevo servicio en el sistema. Accesible para ADMIN y USER. Se pueden adjuntar hasta 5 fotos.'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: Object.values(ServiceType) },
+        description: { type: 'string' },
+        price: { type: 'number' },
+        paid: { type: 'boolean' },
+        deliveryNotes: { type: 'string' },
+        photos: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary'
+          }
+        }
+      },
+      required: ['type', 'description', 'price']
+    }
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -65,11 +95,52 @@ export class ServiceController {
   })
   async create(
     @Request() req: any,
-    @Body() createServiceDto: CreateServiceDto
+    @Body() createServiceDto: CreateServiceDto,
+    @UploadedFiles() files: { photos?: Express.Multer.File[] }
   ): Promise<{ data: ServiceResponseDto }> {
     const userId = req.user.userId;
-    const service = await this.serviceService.create(createServiceDto, userId);
-    return { data: service };
+    const photoUrls: string[] = [];
+    const logger = new Logger(ServiceController.name);
+
+    try {
+      // Subir fotos a Supabase si existen
+      if (files?.photos?.length) {
+        for (const file of files.photos) {
+          const fileExtension = path.extname(file.originalname).toLowerCase();
+          const fileName = `services/${uuidv4()}${fileExtension}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('tecnicentroJR-img')
+            .upload(fileName, file.buffer, {
+              cacheControl: '31536000', // 1 año
+              contentType: file.mimetype,
+            });
+
+          if (uploadError) {
+            logger.error('Error al subir archivo a Supabase:', uploadError);
+            throw new BadRequestException('Error al subir las fotos');
+          }
+
+          // Obtener URL pública
+          const { data: { publicUrl } } = supabase.storage
+            .from('tecnicentroJR-img')
+            .getPublicUrl(fileName);
+
+          photoUrls.push(publicUrl);
+        }
+      }
+
+      // Crear servicio con las URLs de las fotos
+      const service = await this.serviceService.create({
+        ...createServiceDto,
+        photoUrls: photoUrls.length > 0 ? photoUrls : undefined
+      }, userId);
+      
+      return { data: service };
+    } catch (error) {
+      logger.error('Error al crear el servicio:', error);
+      throw error;
+    }
   }
 
   /**
@@ -205,8 +276,11 @@ export class ServiceController {
     const isAdmin = req.user.role === Role.ADMIN;
     
     // Validar que el estado sea válido si se proporciona
-    if (updateServiceDto.status && !Object.values(ServiceStatus).includes(updateServiceDto.status)) {
-      throw new BadRequestException('Estado de servicio no válido');
+    if (updateServiceDto.status) {
+      const validStatuses = ['IN_PROGRESS', 'COMPLETED', 'DELIVERED', 'PAID'];
+      if (!validStatuses.includes(updateServiceDto.status)) {
+        throw new BadRequestException(`Estado de servicio no válido. Los valores permitidos son: ${validStatuses.join(', ')}`);
+      }
     }
     
     // Si se está marcando como pagado, verificar permisos adicionales

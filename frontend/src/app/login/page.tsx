@@ -18,20 +18,88 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Validación básica
+    if (!email || !password) {
+      setError('Por favor ingresa tu correo y contraseña');
+      return;
+    }
+    
+    // Validación de formato de correo
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Por favor ingresa un correo electrónico válido');
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
+      console.log('Iniciando proceso de login...');
+      console.log('Email:', email);
+      console.log('Password:', password ? '***' : '(vacío)');
+      
       const success = await login(email, password);
+      console.log('Login result:', success);
+      
       if (success) {
-        // Use window.location.href instead of router.push to ensure a full page reload
+        console.log('Login exitoso, redirigiendo a /dashboard');
+        // Redirigir al dashboard después de un inicio de sesión exitoso
         window.location.href = '/dashboard';
-        return;
-      } else {
-        setError('Credenciales inválidas. Usa test@example.com / password123');
       }
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Ocurrió un error al iniciar sesión');
+    } catch (error) {
+      console.error('Error en el login:', error);
+      
+      // Mostrar el error completo en la consola
+      interface AxiosErrorDetails {
+        message?: string;
+        code?: string;
+        response?: {
+          status?: number;
+          statusText?: string;
+          data?: {
+            message?: string;
+            error?: string;
+            statusCode?: number;
+          };
+        };
+        config?: {
+          url?: string;
+          method?: string;
+          headers?: Record<string, string>;
+          data?: string;
+        };
+      }
+      
+      const axiosError = error as AxiosErrorDetails;
+      console.error('Error details:', {
+        message: axiosError?.message,
+        code: axiosError?.code,
+        status: axiosError?.response?.status,
+        statusText: axiosError?.response?.statusText,
+        data: axiosError?.response?.data,
+        config: {
+          url: axiosError?.config?.url,
+          method: axiosError?.config?.method,
+          headers: axiosError?.config?.headers,
+          data: axiosError?.config?.data,
+        },
+      });
+      
+      // Manejo de errores específicos
+      if (axiosError?.response?.status === 401) {
+        const errorMessage = axiosError.response?.data?.message || 'Correo o contraseña incorrectos';
+        setError(`Error de autenticación: ${errorMessage}`);
+      } else if (axiosError?.response?.status === 500) {
+        setError('Error en el servidor. Por favor, inténtalo de nuevo más tarde.');
+      } else if (axiosError?.code === 'ECONNABORTED') {
+        setError('La solicitud está tardando demasiado. Verifica tu conexión a internet.');
+      } else if (axiosError?.message?.includes('Network Error')) {
+        setError('No se pudo conectar al servidor. Verifica tu conexión a internet.');
+      } else if (axiosError?.response?.data?.message) {
+        setError(`Error del servidor: ${axiosError.response.data.message}`);
+      } else {
+        setError(`Error al iniciar sesión: ${axiosError?.message || 'Error desconocido'}`);
+      }
     } finally {
       setIsLoading(false);
     }

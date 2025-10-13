@@ -381,43 +381,53 @@ export class AuthController {
     },
   })
   async changePassword(
+    @Body() { currentPassword, newPassword }: ChangePasswordDto,
     @Req() req: any,
-    @Body() changePasswordDto: ChangePasswordDto,
   ) {
-    const { currentPassword, newPassword } = changePasswordDto;
-    const userId = req.user.userId; // Obtenido del token JWT
+    const userId = req.user.id;
+    this.logger.log(`Iniciando cambio de contraseña para el usuario ID: ${userId}`);
 
     try {
       // Obtener el usuario actual
+      this.logger.debug(`Buscando usuario con ID: ${userId}`);
       const user = await this.userService.findById(userId);
       if (!user) {
+        this.logger.warn(`Usuario no encontrado con ID: ${userId}`);
         throw new UnauthorizedException('Usuario no encontrado');
       }
+      this.logger.debug(`Usuario encontrado: ${user.email}`);
 
       // Verificar credenciales actuales
+      this.logger.debug('Validando credenciales actuales del usuario');
       const isValid = await this.authService.validateUser(
         user.email,
         currentPassword,
       );
       if (!isValid) {
+        this.logger.warn(`Credenciales inválidas para el usuario: ${user.email}`);
         throw new ForbiddenException('Credenciales actuales incorrectas');
       }
+      this.logger.debug('Credenciales validadas correctamente');
 
       // Cambiar la contraseña
+      this.logger.debug('Iniciando proceso de cambio de contraseña');
       await this.userService.changePassword(
         user.email,
         currentPassword,
         newPassword,
       );
 
+      this.logger.log(`Contraseña actualizada exitosamente para el usuario: ${user.email}`);
       return { message: 'Contraseña actualizada exitosamente' };
     } catch (error) {
       if (
         error instanceof UnauthorizedException ||
         error instanceof ForbiddenException
       ) {
+        this.logger.error(`Error de autorización: ${error.message}`, error.stack);
         throw error;
       }
+      this.logger.error(`Error al cambiar la contraseña: ${error.message}`, error.stack);
       throw new BadRequestException('No se pudo cambiar la contraseña');
     }
   }

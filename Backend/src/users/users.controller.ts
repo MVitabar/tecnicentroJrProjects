@@ -1,23 +1,26 @@
 import { 
   Controller, 
   Post, 
+  Get,
+  Put,
+  Delete,
   Body, 
-  UseGuards, 
-  Get, 
-  Param, 
-  Put, 
-  Delete, 
-  UseInterceptors, 
-  UploadedFile, 
-  ParseFilePipe, 
-  MaxFileSizeValidator, 
-  FileTypeValidator, 
-  Request, 
-  Logger,
+  Param,
+  Request,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
   BadRequestException,
   ForbiddenException,
-  UnauthorizedException
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiConsumes } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -25,6 +28,8 @@ import { CreateSimpleUserDto } from '../auth/dto/create-simple-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Role, User } from '@prisma/client';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserResponseDto } from 'src/auth/dto/create-user-response.dto';
@@ -40,7 +45,10 @@ export class UsersController {
   private readonly MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   private readonly ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
 
-  constructor(private readonly usersService: UsersService) {
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly authService: AuthService
+  ) {
     // Asegurarse de que el bucket exista al iniciar
     this.initializeBucket();
   }
@@ -311,65 +319,119 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Get(':id')
+  @Put('change-password')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({ 
-    summary: 'Obtener usuario por ID',
-    description: 'Obtiene los detalles de un usuario específico por su ID. El usuario puede ver su propia información o un ADMIN puede ver cualquier usuario'
+  @Roles(Role.USER)
+  @ApiOperation({
+    summary: 'Cambiar contraseña de usuario',
+    description: 'Permite a un usuario con rol USER cambiar su contraseña. Se requiere la contraseña actual para realizar el cambio.'
   })
-  @ApiParam({ name: 'id', description: 'ID del usuario a buscar' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Usuario encontrado',
-    type: CreateUserResponseDto
+  @ApiBody({
+    description: 'Datos requeridos para el cambio de contraseña',
+    type: ChangePasswordDto,
+    examples: {
+      example: {
+        value: {
+          currentPassword: 'contraseñaActual123',
+          newPassword: 'nuevaContraseñaSegura123',
+          confirmNewPassword: 'nuevaContraseñaSegura123'
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 403, description: 'No autorizado' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async findOne(
-    @Param('id') id: string,
-    @Request() req
-  ) {
-    // Si no es ADMIN, solo puede ver su propio perfil
-    if (req.user.role !== Role.ADMIN && req.user.sub !== id) {
-      throw new ForbiddenException('No tienes permiso para ver este usuario');
+  @ApiResponse({
+    status: 200,
+    description: 'Contraseña actualizada exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Contraseña actualizada exitosamente' },
+      }
     }
-    return this.usersService.findById(id);
-  }
-
-  @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({ 
-    summary: 'Actualizar usuario',
-    description: 'Actualiza los datos de un usuario existente. El usuario puede actualizar su propia información o un ADMIN puede actualizar cualquier usuario'
   })
-  @ApiParam({ name: 'id', description: 'ID del usuario a actualizar' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Usuario actualizado exitosamente',
-    type: CreateUserResponseDto
+  @ApiResponse({
+    status: 400,
+    description: 'Datos de entrada inválidos',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: 'Las contraseñas no coinciden' },
+        error: { type: 'string', example: 'Bad Request' }
+      }
+    }
   })
-  @ApiResponse({ status: 400, description: 'Datos de entrada inválidos' })
-  @ApiResponse({ status: 403, description: 'No autorizado' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  @ApiResponse({ status: 409, description: 'El correo electrónico o teléfono ya está en uso' })
-  async update(
-    @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto,
+  @ApiResponse({
+    status: 401,
+    description: 'Credenciales inválidas',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'La contraseña actual es incorrecta' },
+        error: { type: 'string', example: 'Unauthorized' }
+      }
+    }
+  })
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
     @Request() req: any
   ) {
-    // Si no es ADMIN, solo puede actualizar su propio perfil
-    if (req.user.role !== Role.ADMIN && req.user.sub !== id) {
-      throw new ForbiddenException('No tienes permiso para actualizar este usuario');
+    const userId = req.user.id;
+    this.logger.log(`Iniciando cambio de contraseña para el usuario ID: ${userId}`);
+
+    try {
+      // Validar que las nuevas contraseñas coincidan
+      if (changePasswordDto.newPassword !== changePasswordDto.confirmNewPassword) {
+        throw new BadRequestException('Las contraseñas no coinciden');
+      }
+
+      // Obtener el usuario actual
+      const user = await this.usersService.findById(userId);
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado con ID: ${userId}`);
+        throw new NotFoundException('Usuario no encontrado');
+      }
+
+      // Verificar que el usuario tenga el rol USER
+      if (user.role !== Role.USER) {
+        throw new ForbiddenException('Este endpoint es solo para usuarios con rol USER');
+      }
+
+      // Validar la contraseña actual
+      const isPasswordValid = await bcrypt.compare(
+        changePasswordDto.currentPassword,
+        user.password
+      );
+
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta');
+      }
+
+      // Actualizar la contraseña
+      const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
+      await this.usersService.update(userId, { password: hashedPassword });
+      
+      this.logger.log(`Contraseña actualizada exitosamente para el usuario ID: ${userId}`);
+      
+      return {
+        message: 'Contraseña actualizada exitosamente'
+      };
+    } catch (error) {
+      this.logger.error(`Error al cambiar la contraseña: ${error.message}`, error.stack);
+      
+      // Reenviar el error si ya es una excepción conocida
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      
+      throw new InternalServerErrorException('Error al cambiar la contraseña');
     }
-    
-    // Si es usuario normal, no puede cambiar su rol (si el DTO incluye el campo role)
-    if (req.user.role !== Role.ADMIN && 'role' in updateUserDto) {
-      throw new ForbiddenException('No tienes permiso para cambiar roles');
-    }
-    
-    return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')

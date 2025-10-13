@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { 
+  Injectable, 
+  BadRequestException, 
+  UnauthorizedException 
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import * as bcrypt from 'bcrypt';
 import { User, Role } from '@prisma/client';
@@ -178,16 +182,33 @@ export class UsersService {
     async changePassword(email: string, currentPassword: string, newPassword: string) {
         // 1. Buscar usuario
         const user = await this.findByEmail(email);
-        if (!user) return false;
+        if (!user) {
+            throw new UnauthorizedException('Usuario no encontrado');
+        }
 
         // 2. Verificar contraseña actual
         const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) return false;
+        if (!isMatch) {
+            throw new UnauthorizedException('La contraseña actual es incorrecta');
+        }
 
-        // 3. Hashear la nueva contraseña
+        // 3. Validar que la nueva contraseña sea diferente a la actual
+        if (currentPassword === newPassword) {
+            throw new BadRequestException('La nueva contraseña debe ser diferente a la actual');
+        }
+
+        // 4. Validar fortaleza de la nueva contraseña
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]).{6,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            throw new BadRequestException(
+                'La nueva contraseña debe tener al menos 6 caracteres, una mayúscula, un número y un carácter especial',
+            );
+        }
+
+        // 5. Hashear la nueva contraseña
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        // 4. Actualizar password y fecha de cambio
+        // 6. Actualizar password
         await this.updatePassword(user.id, hashedPassword);
 
         return true;

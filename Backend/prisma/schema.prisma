@@ -46,6 +46,7 @@ model User {
   // Relaciones inversas
   products                  Product[]      // Productos creados por el usuario
   sales                     Sale[]         // Ventas realizadas por el usuario
+  services                  Service[]      // Servicios creados por el usuario
 }
 
 model Product {
@@ -84,14 +85,25 @@ enum SaleStatus {
 }
 
 model Service {
-  id          String        @id @default(uuid())
-  type        ServiceType   @default(REPAIR)
-  description String
-  price       Float
-  paid        Boolean       @default(false)
-  photoUrls   String[]      @default([])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id              String          @id @default(uuid())
+  type            ServiceType     @default(REPAIR)
+  status          ServiceStatus   @default(IN_PROGRESS)
+  description     String
+  deliveryNotes   String?         @db.Text
+  price           Float
+  paid            Boolean         @default(false)
+  photoUrls       String[]        @default([])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+}
+
+enum ServiceStatus {
+  IN_PROGRESS   // En proceso
+  COMPLETED     // Completado
+  DELIVERED     // Entregado
+  PAID          // Pagado
 }
 
 enum ServiceType {

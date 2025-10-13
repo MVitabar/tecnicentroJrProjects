@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Logger, Get, Put, Param, Delete } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Logger, Get, Put, Param, Delete, Request, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateSimpleUserDto } from '../auth/dto/create-simple-user.dto';
@@ -70,6 +70,8 @@ export class UsersController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ 
     summary: 'Obtener todos los usuarios',
     description: 'Obtiene una lista de todos los usuarios registrados. Requiere rol de ADMIN'
@@ -77,16 +79,19 @@ export class UsersController {
   @ApiResponse({ 
     status: 200, 
     description: 'Lista de usuarios obtenida exitosamente',
-    type: [CreateUserResponseDto] // Asegúrate de crear este DTO
+    type: [CreateUserResponseDto]
   })
+  @ApiResponse({ status: 403, description: 'No autorizado' })
   async findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ 
     summary: 'Obtener usuario por ID',
-    description: 'Obtiene los detalles de un usuario específico por su ID. Requiere rol de ADMIN'
+    description: 'Obtiene los detalles de un usuario específico por su ID. El usuario puede ver su propia información o un ADMIN puede ver cualquier usuario'
   })
   @ApiParam({ name: 'id', description: 'ID del usuario a buscar' })
   @ApiResponse({ 
@@ -94,17 +99,25 @@ export class UsersController {
     description: 'Usuario encontrado',
     type: CreateUserResponseDto
   })
+  @ApiResponse({ status: 403, description: 'No autorizado' })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async findOne(@Param('id') id: string) {
+  async findOne(
+    @Param('id') id: string,
+    @Request() req
+  ) {
+    // Si no es ADMIN, solo puede ver su propio perfil
+    if (req.user.role !== Role.ADMIN && req.user.sub !== id) {
+      throw new ForbiddenException('No tienes permiso para ver este usuario');
+    }
     return this.usersService.findById(id);
   }
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ 
     summary: 'Actualizar usuario',
-    description: 'Actualiza los datos de un usuario existente. Requiere rol de ADMIN'
+    description: 'Actualiza los datos de un usuario existente. El usuario puede actualizar su propia información o un ADMIN puede actualizar cualquier usuario'
   })
   @ApiParam({ name: 'id', description: 'ID del usuario a actualizar' })
   @ApiResponse({ 
@@ -113,12 +126,24 @@ export class UsersController {
     type: CreateUserResponseDto
   })
   @ApiResponse({ status: 400, description: 'Datos de entrada inválidos' })
+  @ApiResponse({ status: 403, description: 'No autorizado' })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
   @ApiResponse({ status: 409, description: 'El correo electrónico o teléfono ya está en uso' })
   async update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @Request() req: any
   ) {
+    // Si no es ADMIN, solo puede actualizar su propio perfil
+    if (req.user.role !== Role.ADMIN && req.user.sub !== id) {
+      throw new ForbiddenException('No tienes permiso para actualizar este usuario');
+    }
+    
+    // Si es usuario normal, no puede cambiar su rol (si el DTO incluye el campo role)
+    if (req.user.role !== Role.ADMIN && 'role' in updateUserDto) {
+      throw new ForbiddenException('No tienes permiso para cambiar roles');
+    }
+    
     return this.usersService.update(id, updateUserDto);
   }
 

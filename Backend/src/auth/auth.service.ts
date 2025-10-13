@@ -2,13 +2,15 @@ import {
   BadRequestException, 
   ConflictException, 
   ForbiddenException, 
-  Injectable, 
+  Injectable,
+  Logger,
   UnauthorizedException 
 } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
-import { SchedulerRegistry } from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, User } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { UsersService } from '../users/users.service';
@@ -18,14 +20,124 @@ import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly emailValidator: EmailValidatorService,
-    private schedulerRegistry: SchedulerRegistry
-  ) {}
+    private readonly schedulerRegistry: SchedulerRegistry
+  ) {
+    // Limpiar usuarios no verificados al iniciar
+    this.cleanupUnverifiedAdminsOnStartup();
+  }
+
+  // Se ejecuta al iniciar la aplicación
+  private async cleanupUnverifiedAdminsOnStartup() {
+    try {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      const result = await this.prisma.user.deleteMany({
+        where: { 
+          role: 'ADMIN',
+          verified: false,
+          createdAt: {
+            lt: twentyFourHoursAgo
+          }
+        },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(`Se eliminaron ${result.count} administradores no verificados al iniciar`);
+      }
+    } catch (error) {
+      this.logger.error('Error al limpiar administradores no verificados al iniciar:', error);
+    }
+  }
+
+  // Se ejecuta todos los días a medianoche
+  @Cron('0 0 * * *')
+  async cleanupUnverifiedAdminsDaily() {
+    this.logger.log('Iniciando limpieza diaria de administradores no verificados...');
+    try {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      const result = await this.prisma.user.deleteMany({
+        where: { 
+          role: 'ADMIN',
+          verified: false,
+          createdAt: {
+            lt: twentyFourHoursAgo
+          }
+        },
+      });
+
+      this.logger.log(`Limpieza diaria: Se eliminaron ${result.count} administradores no verificados`);
+      return result;
+    } catch (error) {
+      this.logger.error('Error en la limpieza diaria de administradores no verificados:', error);
+      throw error;
+    }
+  }
+
+  // Limpia los tokens expirados todos los días a la medianoche
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async cleanExpiredTokens() {
+    this.logger.log('Iniciando limpieza de tokens expirados...');
+    
+    try {
+      const result = await this.prisma.refreshToken.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date() // Elimina tokens con fecha de expiración pasada
+          }
+        }
+      });
+      
+      this.logger.log(`Se eliminaron ${result.count} tokens expirados`);
+      return result;
+    } catch (error) {
+      this.logger.error('Error al limpiar tokens expirados:', error);
+      throw error;
+    }
+  }
+
+  // Limpia tokens huérfanos (sin usuario) el primer día de cada mes
+  @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_MIDNIGHT)
+  async cleanOrphanedTokens() {
+    this.logger.log('Buscando tokens huérfanos...');
+    
+    try {
+      // Encontrar todos los tokens con sus usuarios
+      const allTokens = await this.prisma.refreshToken.findMany({
+        include: { user: true }
+      });
+      
+      // Filtrar tokens sin usuario
+      const orphanedTokens = allTokens.filter(token => !token.user);
+
+      if (orphanedTokens.length > 0) {
+        this.logger.warn(`Encontrados ${orphanedTokens.length} tokens huérfanos`);
+        const result = await this.prisma.refreshToken.deleteMany({
+          where: {
+            id: { in: orphanedTokens.map(t => t.id) }
+          }
+        });
+        this.logger.log(`Tokens huérfanos eliminados: ${result.count}`);
+        return result;
+      }
+      
+      this.logger.log('No se encontraron tokens huérfanos');
+      return { count: 0 };
+    } catch (error) {
+      this.logger.error('Error al limpiar tokens huérfanos:', error);
+      throw error;
+    }
+  }
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
@@ -152,23 +264,9 @@ export class AuthService {
   }
 
   private scheduleUserCleanup(userId: string) {
-    const timeout = setTimeout(async () => {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (user && !user.verified) {
-        await this.prisma.user.deleteMany({
-          where: { 
-            id: userId,
-            verified: false
-          },
-        });
-        console.log(`Usuario no verificado eliminado: ${userId}`);
-      }
-    }, 24 * 60 * 60 * 1000); // 24 horas
-
-    this.schedulerRegistry.addTimeout(`user-cleanup-${userId}`, timeout);
+    // Ya no necesitamos el timeout individual ya que ahora tenemos la limpieza diaria
+    // Solo registramos que el usuario necesita ser verificado
+    this.logger.log(`Usuario ${userId} necesita verificación. Será verificado en la próxima limpieza diaria.`);
   }
 
   // Métodos existentes...
@@ -258,6 +356,24 @@ export class AuthService {
       role: user.role 
     };
 
+    // Crear tokens
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    
+    // Calcular fecha de expiración (7 días desde ahora)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Guardar el refresh token en la base de datos
+    await this.prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: expiresAt,
+        revoked: false
+      }
+    });
+
     // Actualizar la última hora de inicio de sesión
     await this.prisma.user.update({
       where: { id: user.id },
@@ -268,8 +384,8 @@ export class AuthService {
     });
 
     return {
-      access_token: this.jwtService.sign(payload),
-      refresh_token: this.jwtService.sign(payload, { expiresIn: '7d' }),
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -278,29 +394,76 @@ export class AuthService {
         verified: user.verified
       }
     };
+  } catch (error) {
+    console.error('Error al refrescar token:', error);
+    throw new UnauthorizedException('Token de refresco inválido');
   }
 
   async refreshToken(refreshToken: string, ipAddress: string) {
     try {
+      // 1. Verificar que el token sea válido
       const payload = this.jwtService.verify(refreshToken);
-      const user = await this.usersService.findById(payload.sub);
+      
+      // 2. Buscar el token en la base de datos
+      const storedToken = await this.prisma.refreshToken.findFirst({
+        where: { 
+          token: refreshToken,
+          userId: payload.sub,
+          revoked: false,
+          expiresAt: { gte: new Date() }
+        }
+      });
 
+      if (!storedToken) {
+        throw new UnauthorizedException('Token de refresco inválido o expirado');
+      }
+
+      // 3. Obtener el usuario
+      const user = await this.usersService.findById(payload.sub);
       if (!user) {
         throw new UnauthorizedException('Usuario no encontrado');
       }
 
+      // 4. Crear nuevos tokens
       const newPayload = { 
         email: user.email, 
         sub: user.id,
         role: user.role 
       };
 
+      const newAccessToken = this.jwtService.sign(newPayload);
+      const newRefreshToken = this.jwtService.sign(newPayload, { expiresIn: '7d' });
+      
+      // 5. Calcular nueva fecha de expiración
+      const newExpiresAt = new Date();
+      newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+
+      // 6. Actualizar el refresh token en la base de datos
+      await this.prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: { 
+          token: newRefreshToken,
+          expiresAt: newExpiresAt,
+          updatedAt: new Date()
+        }
+      });
+
+      // 7. Actualizar última actividad del usuario
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { 
+          lastLoginAt: new Date(),
+          ...(ipAddress && { lastLoginIp: ipAddress })
+        },
+      });
+
       return {
-        access_token: this.jwtService.sign(newPayload),
-        refresh_token: this.jwtService.sign(newPayload, { expiresIn: '7d' })
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken
       };
     } catch (error) {
-      throw new UnauthorizedException('Token de actualización inválido o expirado');
+      console.error('Error al refrescar token:', error);
+      throw new UnauthorizedException('Token de refresco inválido');
     }
   }
 }

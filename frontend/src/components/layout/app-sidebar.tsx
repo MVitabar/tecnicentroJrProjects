@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Package,
-  Wrench,
   Users,
   FileText,
   Settings,
@@ -33,11 +32,7 @@ const sidebarItems = [
     href: "/dashboard/ventas",
     icon: ShoppingCart,
   },
-  {
-    name: "Servicios",
-    href: "/dashboard/servicios",
-    icon: Wrench,
-  },
+  
   {
     name: "Clientes",
     href: "/dashboard/clientes",

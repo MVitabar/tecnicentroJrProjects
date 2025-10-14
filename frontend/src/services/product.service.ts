@@ -305,3 +305,5 @@ export const productService = {
     }
   }
 };
+
+export type { Product, ProductsResponse } from '@/types/product.types';

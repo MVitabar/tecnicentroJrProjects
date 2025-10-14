@@ -180,11 +180,118 @@ export const productService = {
 
   async updateProduct(id: string, productData: Partial<Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'createdById' | 'createdBy'>>) {
     try {
-      const response = await api.put<{ data: Product }>(`/products/${id}`, productData);
-      return response.data.data;
-    } catch (error) {
-      console.error(`Error updating product ${id}:`, error);
-      throw new Error('No se pudo actualizar el producto. Por favor, intente nuevamente.');
+      // Asegurarse de que el ID sea un string válido
+      if (!id) {
+        throw new Error('ID de producto no válido');
+      }
+
+      // Obtener información del usuario actual
+      const userJson = localStorage.getItem('user');
+      const token = localStorage.getItem('auth_token');
+      
+      if (!userJson || !token) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const currentUser = JSON.parse(userJson);
+      console.log('Usuario actual:', {
+        id: currentUser.id,
+        email: currentUser.email,
+        role: currentUser.role,
+        token: token ? 'Token presente' : 'Token ausente'
+      });
+
+      // Obtener información del producto actual
+      const currentProduct = await this.getProductById(id);
+      console.log('Producto a actualizar:', {
+        id: currentProduct.id,
+        name: currentProduct.name,
+        createdById: currentProduct.createdById,
+        createdBy: currentProduct.createdBy
+      });
+
+      // Validar los datos del producto
+      const updatedData: Record<string, unknown> = { ...productData };
+      
+      // Asegurar que el precio sea un número válido si está presente
+      if ('price' in updatedData) {
+        updatedData.price = parseFloat(String(updatedData.price || '0').replace(',', '.'));
+        if (isNaN(updatedData.price as number) || (updatedData.price as number) <= 0) {
+          throw new Error('El precio debe ser un número mayor a cero');
+        }
+      }
+
+      // Asegurar que el stock sea un número entero si está presente
+      if ('stock' in updatedData && updatedData.stock !== undefined) {
+        updatedData.stock = Math.max(0, parseInt(String(updatedData.stock), 10));
+      }
+
+      console.log('Actualizando producto con datos:', { 
+        id, 
+        updatedData,
+        currentUserId: currentUser.id,
+        productOwnerId: currentProduct.createdById,
+        isOwner: currentUser.id === currentProduct.createdById,
+        isAdmin: currentUser.role === 'ADMIN'
+      });
+      
+      // Usar el endpoint exacto según la documentación de Swagger
+      const response = await api.patch<Product>(`/products/${id}`, updatedData);
+      
+      console.log('Producto actualizado exitosamente:', response.data);
+      return response.data;
+      
+    } catch (error: unknown) {
+      console.error(`Error actualizando producto ${id}:`, error);
+      
+      let errorMessage = 'No se pudo actualizar el producto. Por favor, intente nuevamente.';
+      
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { 
+          response?: { 
+            data?: { message?: string },
+            status?: number,
+            statusText?: string 
+          } 
+        };
+        
+        if (axiosError.response?.status === 403) {
+          errorMessage = 'No tienes permiso para modificar este producto. Solo el propietario puede realizar cambios.';
+        } else if (axiosError.response?.status === 401) {
+          errorMessage = 'Sesión expirada. Por favor, inicie sesión nuevamente.';
+          // Opcional: Redirigir al login
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+        } else if (axiosError.response?.status === 404) {
+          errorMessage = 'Producto no encontrado. Por favor, actualice la lista de productos.';
+        } else if (axiosError.response?.data?.message) {
+          errorMessage = axiosError.response.data.message;
+        } else if (axiosError.response?.statusText) {
+          errorMessage = axiosError.response.statusText;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Definir el tipo para el error de Axios
+      type AxiosErrorWithResponse = Error & {
+        response?: {
+          status?: number;
+          data?: unknown;
+        };
+      };
+
+      const errorWithResponse = error as AxiosErrorWithResponse;
+      
+      console.error('Error detallado:', { 
+        message: errorMessage,
+        error: error instanceof Error ? error.message : 'Error desconocido',
+        status: errorWithResponse.response?.status,
+        data: errorWithResponse.response?.data
+      });
+      
+      throw new Error(errorMessage);
     }
   },
 
@@ -196,5 +303,5 @@ export const productService = {
       console.error(`Error deleting product ${id}:`, error);
       throw new Error('No se pudo eliminar el producto. Por favor, intente nuevamente.');
     }
-  },
+  }
 };

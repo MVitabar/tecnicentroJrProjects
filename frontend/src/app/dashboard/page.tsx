@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 {stats?.productsSummary.totalProducts.toLocaleString()}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {loading ? (
                 <Skeleton className="h-4 w-32 mt-1" />
               ) : (
@@ -188,10 +188,12 @@ export default function DashboardPage() {
                       : "text-green-500"
                   }
                 >
-                  {stats?.productsSummary.lowStockItems} con stock bajo
+                  {stats?.productsSummary.lowStockItems
+                    ? `${stats.productsSummary.lowStockItems} con bajo stock`
+                    : 'Todo en orden'}
                 </span>
               )}
-            </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -209,13 +211,13 @@ export default function DashboardPage() {
             ) : (
               <div className="text-2xl font-bold">{stats?.activeServices}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {loading ? (
                 <Skeleton className="h-4 w-24 mt-1" />
               ) : (
                 "En progreso o pendientes"
               )}
-            </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -233,13 +235,13 @@ export default function DashboardPage() {
             ) : (
               <div className="text-2xl font-bold">{stats?.totalCustomers}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {loading ? (
                 <Skeleton className="h-4 w-20 mt-1" />
               ) : (
                 "Clientes en total"
               )}
-            </p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -269,14 +271,14 @@ export default function DashboardPage() {
                       className="flex items-center justify-between p-2 hover:bg-muted/50 rounded"
                     >
                       <div className="space-y-1">
-                        <p className="text-sm font-medium leading-none">
+                        <div className="text-sm font-medium leading-none">
                           {activity.type === "sale"
                             ? `Venta #${activity.id.slice(0, 6)}`
                             : `Servicio ${activity.status?.toLowerCase()}`}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
+                        </div>
+                        <div className="text-sm text-muted-foreground">
                           {activity.customerName}
-                        </p>
+                        </div>
                       </div>
                       <div className="text-sm font-medium">
                         {activity.amount
@@ -286,9 +288,9 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
+                  <div className="text-sm text-muted-foreground text-center py-4">
                     No hay actividad reciente
-                  </p>
+                  </div>
                 )}
               </div>
             )}

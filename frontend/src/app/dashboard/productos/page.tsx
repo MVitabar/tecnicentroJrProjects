@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { productService, Product } from '@/services/product.service';
+import { productService } from '@/services/product.service';
+import { Product } from '@/types/product.types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,11 +98,12 @@ export default function ProductsPage() {
       }
       setIsModalOpen(false);
       fetchProducts();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving product:', error);
+      const errorMessage = error instanceof Error ? error.message : 'No se pudo guardar el producto';
       toast({
         title: 'Error',
-        description: 'No se pudo guardar el producto',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -111,7 +113,7 @@ export default function ProductsPage() {
     setCurrentProduct(product);
     setFormData({
       name: product.name,
-      description: product.description,
+      description: typeof product.description === 'string' ? product.description : '',
       price: product.price,
       stock: product.stock,
     });
@@ -224,7 +226,9 @@ export default function ProductsPage() {
               </CardHeader>
               <CardContent className="flex-grow">
                 <p className="text-sm text-gray-600 mb-4">
-                  {product.description || 'Sin descripción'}
+                  {typeof product.description === 'string' 
+                    ? product.description 
+                    : 'Sin descripción'}
                 </p>
               </CardContent>
             </Card>

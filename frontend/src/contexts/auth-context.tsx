@@ -106,11 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         // Mapear los campos del token al formato de usuario
+        // Asegurarse de que el rol sea un valor válido
+        const validRoles = ['ADMIN', 'USER', 'TECHNICIAN'];
+        const userRole = validRoles.includes(decoded.role || '') ? decoded.role as string : 'USER';
+        
         const user: User = {
           id: decoded.sub,
           email: decoded.email,
           name: decoded.name || '',
-          role: decoded.role || 'USER',
+          role: userRole,
           verified: decoded.verified || false,
           iat: decoded.iat,
           exp: decoded.exp
@@ -154,19 +158,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Get the login response which contains the user data
       const response = await authService.login({ email, password });
-      console.log('AuthService response:', response);
       
-      if (!response.access_token) {
-        throw new Error('No se recibió un token de acceso en la respuesta');
+      if (!response.user) {
+        console.error('No se pudo obtener la información del usuario después del inicio de sesión');
+        logout();
+        return false;
       }
-
-      localStorage.setItem(process.env.NEXT_PUBLIC_TOKEN_KEY || 'auth_token', response.access_token);
       
-      // Usar el usuario de la respuesta si está disponible
-      if (response.user) {
-        setUser(response.user);
-      }
+      // Update the user state with the data from the API response
+      const userData = {
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name || '',
+        role: response.user.role || 'USER',
+        verified: response.user.verified || false
+      };
+      
+      // Update localStorage with the complete user data
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Update the user state
+      setUser(userData);
       
       return true;
       

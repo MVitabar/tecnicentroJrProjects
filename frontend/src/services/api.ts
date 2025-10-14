@@ -3,7 +3,7 @@ import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestCo
 
 // Ensure the API URL is properly formatted
 export const getApiBaseUrl = () => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://tecnicentrojrbackend-production.up.railway.app';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 };
 
@@ -25,7 +25,7 @@ console.log('API Base URL:', getApiBaseUrl());
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem(process.env.NEXT_PUBLIC_TOKEN_KEY || 'auth_token');
+      const token = localStorage.getItem('auth_token');
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
@@ -42,6 +42,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout. Please check your internet connection.');
     } else if (!error.response) {
@@ -49,33 +51,27 @@ api.interceptors.response.use(
       console.error('Network Error. This could be due to one of the following:');
       console.error('1. The server is not running or not accessible');
       console.error('2. CORS is not properly configured on the server');
-      console.error('3. There might be a network connectivity issue');
+      console.error('3. You are offline');
       
       console.error('\nError details:', {
         message: error.message,
         code: error.code,
         config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          baseURL: error.config?.baseURL,
-          withCredentials: error.config?.withCredentials,
+          url: originalRequest?.url,
+          method: originalRequest?.method,
+          baseURL: originalRequest?.baseURL,
+          withCredentials: originalRequest?.withCredentials,
         },
       });
-      
-      // Log CORS-specific information
-      if (error.message.includes('CORS')) {
-        console.error('\nCORS Issue Detected:');
-        console.error('The server needs to be configured to allow requests from:', window.location.origin);
-        console.error('Required CORS headers:');
-        console.log(`Access-Control-Allow-Origin: ${window.location.origin} or *`);
-        console.log('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-        console.log('Access-Control-Allow-Headers: Content-Type, Authorization');
-        console.log('Access-Control-Allow-Credentials: true');
-      }
-    } else if (error.response?.status === 401) {
+    } else if (error.response.status === 401) {
       // Handle unauthorized access
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(process.env.NEXT_PUBLIC_TOKEN_KEY || 'auth_token');
+      if (typeof window !== 'undefined' && !originalRequest?._retry) {
+        if (originalRequest) {
+          originalRequest._retry = true;
+        }
+        // Clear auth data and redirect to login
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
         window.location.href = '/login';
       }
     }

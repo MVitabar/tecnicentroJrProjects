@@ -240,11 +240,9 @@ export default function ProductsPage() {
       {isModalOpen && (
         <div 
           className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          onClick={() => setIsModalOpen(false)}
         >
           <div 
             className="bg-background rounded-lg p-6 w-full max-w-md border shadow-lg relative"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-6">
               <h2 className="text-2xl font-semibold">

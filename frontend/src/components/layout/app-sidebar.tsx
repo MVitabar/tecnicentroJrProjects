@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   Sun,
+  ShoppingCart,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from '@/contexts/auth-context';
@@ -26,6 +27,11 @@ const sidebarItems = [
     name: "Productos",
     href: "/dashboard/productos",
     icon: Package,
+  },
+  {
+    name: "Ventas",
+    href: "/dashboard/ventas",
+    icon: ShoppingCart,
   },
   {
     name: "Servicios",

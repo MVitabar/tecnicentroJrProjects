@@ -2,7 +2,7 @@
   "name": "Tecnicentro JR",
   "short_name": "Tecnicentro",
   "description": "Sistema de gestión para Tecnicentro JR",
-  "start_url": "/dashboard",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#ffffff",
   "icons": [

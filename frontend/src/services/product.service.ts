@@ -1,80 +1,79 @@
 // src/services/product.service.ts
-import { api, getApiBaseUrl } from './api';
+import { api } from './api';
 import { AxiosError } from 'axios';
 import { Product, ProductsResponse } from '@/types/product.types';
 
-// La autenticación ahora se maneja a través del token en los headers
-// y los datos del usuario se obtienen del localStorage
-
 export const productService = {
   async getProducts(page: number = 1, limit: number = 10, search?: string): Promise<ProductsResponse> {
-    try {
-      const baseUrl = getApiBaseUrl();
-      console.log('Fetching products from:', `${baseUrl}/products/all`);
-      
-      const response = await api.get<{
-        data: Product[];
-        total: number;
-      }>('/products/all', {
-        params: { 
-          page, 
-          limit, 
-          ...(search && { search })
-        },
-      });
-      
-      // Transform the response to match our frontend needs
-      const items = response.data.data || [];
-      const total = response.data.total || 0;
-      
-      const transformedResponse: ProductsResponse = {
+  try {
+    const response = await api.get<ProductsResponse>('/products/all', {
+      params: { 
+        page, 
+        limit, 
+        ...(search && { search })
+      },
+    });
+
+    // If the response is an array (legacy format), transform it to the expected format
+    if (Array.isArray(response.data)) {
+      const items = response.data;
+      return {
         data: items,
-        total: total,
+        total: items.length,
         meta: {
-          totalItems: total,
+          totalItems: items.length,
           itemCount: items.length,
           itemsPerPage: limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages: Math.ceil(items.length / limit),
           currentPage: page
         }
       };
-      
-      return transformedResponse;
-    } catch (error: unknown) {
-      const axiosError = error as AxiosError<{ message?: string }>;
-      console.error('Error fetching products:', {
-        message: axiosError.message,
-        config: axiosError.config,
-        response: axiosError.response?.data,
-      });
-      throw new Error(axiosError.response?.data?.message || 'No se pudieron cargar los productos. Por favor, verifique su conexión e intente nuevamente.');
     }
-  },
+
+    // If the response is already in the expected format, return it directly
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    console.error('Error fetching products:', {
+      message: axiosError.message,
+      config: axiosError.config,
+      response: axiosError.response?.data,
+    });
+    throw new Error(axiosError.response?.data?.message || 'No se pudieron cargar los productos. Por favor, verifique su conexión e intente nuevamente.');
+  }
+},
 
   async getProductById(id: string): Promise<Product> {
     try {
-      const response = await api.get<{ data: Product }>(`/products/${id}`);
-      return response.data.data;
+      const response = await api.get<Product>(`/products/findOne/${id}`);
+      
+      return response.data;
     } catch (error) {
       console.error(`Error fetching product ${id}:`, error);
+      
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { 
+          response?: { 
+            status?: number,
+            data?: { message?: string }
+          } 
+        };
+        
+        if (axiosError.response?.status === 401) {
+          throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
+        }
+        
+        if (axiosError.response?.data?.message) {
+          throw new Error(axiosError.response.data.message);
+        }
+      }
+      
       throw new Error('No se pudo cargar el producto. Por favor, intente nuevamente.');
     }
   },
 
   async createProduct(productData: Record<string, unknown> | { [key: string]: { value: unknown } } | Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'createdById' | 'createdBy'>) {
     try {
-      // Verificar si estamos en el navegador
-      if (typeof window === 'undefined') {
-        throw new Error('No se puede acceder al localStorage en el servidor');
-      }
-      
-      // Verificar autenticación
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
-      }
-
-      // Verificar rol de administrador y obtener datos del usuario
       const userJson = localStorage.getItem('user');
       if (!userJson) {
         throw new Error('No se encontró la información del usuario. Por favor, inicie sesión nuevamente.');
@@ -194,49 +193,50 @@ export const productService = {
       }
 
       const currentUser = JSON.parse(userJson);
-      console.log('Usuario actual:', {
-        id: currentUser.id,
-        email: currentUser.email,
-        role: currentUser.role,
-        token: token ? 'Token presente' : 'Token ausente'
-      });
-
-      // Obtener información del producto actual
-      const currentProduct = await this.getProductById(id);
-      console.log('Producto a actualizar:', {
-        id: currentProduct.id,
-        name: currentProduct.name,
-        createdById: currentProduct.createdById,
-        createdBy: currentProduct.createdBy
-      });
-
-      // Validar los datos del producto
-      const updatedData: Record<string, unknown> = { ...productData };
       
-      // Asegurar que el precio sea un número válido si está presente
-      if ('price' in updatedData) {
-        updatedData.price = parseFloat(String(updatedData.price || '0').replace(',', '.'));
-        if (isNaN(updatedData.price as number) || (updatedData.price as number) <= 0) {
+      // Extraer solo los campos necesarios y asegurarse de no incluir userId
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { userId, ...cleanProductData } = productData as Record<string, unknown>;
+      // userId se extrae pero no se usa, lo cual es intencional
+      
+      // Crear objeto con solo los campos permitidos
+      const updateData: Record<string, unknown> = {};
+      
+      // Validar y limpiar los campos
+      if (cleanProductData.name !== undefined) {
+        updateData.name = String(cleanProductData.name).trim();
+      }
+      
+      if (cleanProductData.description !== undefined) {
+        updateData.description = String(cleanProductData.description).trim();
+      }
+      
+      if (cleanProductData.price !== undefined) {
+        const parsedPrice = parseFloat(String(cleanProductData.price).replace(',', '.'));
+        if (isNaN(parsedPrice) || parsedPrice <= 0) {
           throw new Error('El precio debe ser un número mayor a cero');
         }
+        updateData.price = parsedPrice;
       }
-
-      // Asegurar que el stock sea un número entero si está presente
-      if ('stock' in updatedData && updatedData.stock !== undefined) {
-        updatedData.stock = Math.max(0, parseInt(String(updatedData.stock), 10));
+      
+      if (cleanProductData.stock !== undefined) {
+        updateData.stock = Math.max(0, parseInt(String(cleanProductData.stock), 10));
       }
 
       console.log('Actualizando producto con datos:', { 
         id, 
-        updatedData,
+        updateData,
         currentUserId: currentUser.id,
-        productOwnerId: currentProduct.createdById,
-        isOwner: currentUser.id === currentProduct.createdById,
-        isAdmin: currentUser.role === 'ADMIN'
+        userRole: currentUser.role
       });
       
       // Usar el endpoint exacto según la documentación de Swagger
-      const response = await api.patch<Product>(`/products/${id}`, updatedData);
+      const response = await api.patch<Product>(`/products/update/${id}`, updateData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
       
       console.log('Producto actualizado exitosamente:', response.data);
       return response.data;
@@ -259,7 +259,6 @@ export const productService = {
           errorMessage = 'No tienes permiso para modificar este producto. Solo el propietario puede realizar cambios.';
         } else if (axiosError.response?.status === 401) {
           errorMessage = 'Sesión expirada. Por favor, inicie sesión nuevamente.';
-          // Opcional: Redirigir al login
           if (typeof window !== 'undefined') {
             window.location.href = '/login';
           }
@@ -274,21 +273,9 @@ export const productService = {
         errorMessage = error.message;
       }
       
-      // Definir el tipo para el error de Axios
-      type AxiosErrorWithResponse = Error & {
-        response?: {
-          status?: number;
-          data?: unknown;
-        };
-      };
-
-      const errorWithResponse = error as AxiosErrorWithResponse;
-      
       console.error('Error detallado:', { 
         message: errorMessage,
         error: error instanceof Error ? error.message : 'Error desconocido',
-        status: errorWithResponse.response?.status,
-        data: errorWithResponse.response?.data
       });
       
       throw new Error(errorMessage);
@@ -297,7 +284,7 @@ export const productService = {
 
   async deleteProduct(id: string) {
     try {
-      const response = await api.delete(`/products/${id}`);
+      const response = await api.delete(`/products/remove/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Error deleting product ${id}:`, error);

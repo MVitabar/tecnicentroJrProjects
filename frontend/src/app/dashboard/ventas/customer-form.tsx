@@ -57,7 +57,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ customerData, onCust
             name="documentType"
             value={customerData.documentType}
             onChange={onCustomerChange}
-            className="w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            className="w-full p-2 bg-muted border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="dni">DNI</option>
             <option value="ruc">RUC</option>

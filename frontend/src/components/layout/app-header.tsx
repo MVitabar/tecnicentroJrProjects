@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Package, ShoppingCart, Users, LogOut, Settings } from 'lucide-react';
+import { Home, Package, ShoppingCart, Users, LogOut, Settings, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
 const mobileNavItems = [
   { name: 'Inicio', href: '/dashboard', icon: Home },
   { name: 'Productos', href: '/dashboard/productos', icon: Package },
   { name: 'Ventas', href: '/dashboard/ventas', icon: ShoppingCart },
+  { name: 'Servicios', href: '/dashboard/servicios', icon: FileText },
   { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
   { name: 'Configuración', href: '/dashboard/configuracion', icon: Settings },
 ];

@@ -3,24 +3,15 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { saleService, type Sale } from "@/services/sale.service";
+import { saleService, type Sale, type CreateSaleDto } from "@/services/sale.service";
 import { productService } from "@/services/product.service";
 import { serviceService } from "@/services/service.service";
-import { SalesList } from "@/components/sales/sales-list";
+import { SalesList } from "@/app/dashboard/ventas/sales-list";
 import { SaleForm } from "./sale-form-component";
 import { Product } from "@/types/product.types";
 import { toast } from "sonner";
-
-type Service = {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  duration?: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
+import type { SaleData, SaleItem } from "@/types/sale.types";
+import type { Service } from "@/types/service.types";
 
 export default function VentasPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -43,13 +34,17 @@ export default function VentasPage() {
 
   const loadProductsAndServices = async () => {
     try {
-      const [productsResponse, servicesResponse] = await Promise.all([
-        productService.getProducts(1, 100),
-        serviceService.getServices(1, 100, "ACTIVE"),
-      ]);
+      // Get all services (no filters, we'll filter on client side)
+      const servicesResponse = await serviceService.getServices();
+      // Get all products
+      const productsResponse = await productService.getProducts(1, 100);
       
       setProducts(productsResponse.data || []);
-      setServices(servicesResponse.data || []);
+      // Filter active services on the client side
+      const activeServices = Array.isArray(servicesResponse) 
+        ? servicesResponse.filter(service => service.isActive)
+        : [];
+      setServices(activeServices);
     } catch (error) {
       console.error("Error al cargar productos/servicios:", error);
       toast.error("No se pudieron cargar los productos/servicios");
@@ -69,10 +64,23 @@ export default function VentasPage() {
     setIsFormOpen(false);
   };
 
-  const handleCreateSale = async (saleData: { items: Array<{ productId: string; quantity: number }> }) => {
+  const handleCreateSale = async (saleData: SaleData): Promise<boolean> => {
     try {
-      const newSale = await saleService.createSale(saleData);
-      setSales([newSale, ...sales]);
+      const saleDto: CreateSaleDto = {
+        items: saleData.items.map((item: SaleItem) => ({
+          product: {
+            id: item.product.id
+          },
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          name: item.name
+        })),
+        paymentMethod: saleData.paymentMethod || 'CASH',
+        clientId: saleData.customer?.documentNumber // Using documentNumber as client ID
+      };
+      
+      const newSale = await saleService.createSale(saleDto);
+      setSales(prevSales => [newSale, ...prevSales]);
       toast.success("Venta registrada exitosamente");
       setIsFormOpen(false);
       return true;

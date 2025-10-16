@@ -34,14 +34,14 @@ const sidebarItems = [
   },
   
   {
+    name: "Servicios",
+    href: "/dashboard/servicios",
+    icon: FileText,
+  },
+  {
     name: "Clientes",
     href: "/dashboard/clientes",
     icon: Users,
-  },
-  {
-    name: "Reportes",
-    href: "/dashboard/reportes",
-    icon: FileText,
   },
   {
     name: "Configuración",

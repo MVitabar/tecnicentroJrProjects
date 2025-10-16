@@ -53,7 +53,7 @@ api.interceptors.response.use(
       console.error('2. CORS is not properly configured on the server');
       console.error('3. You are offline');
       
-      console.error('\nError details:', {
+      console.error('Error details:', {
         message: error.message,
         code: error.code,
         config: {

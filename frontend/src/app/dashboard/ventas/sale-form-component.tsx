@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { Product } from "@/types/product.types";
-import { Plus, Minus, Trash2, ShoppingCart, X, FileText, Info } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Trash2,
+  ShoppingCart,
+  X,
+  XCircle,
+  FileText,
+  Info,
+} from "lucide-react";
 import { type CustomerData } from "./customer-form";
+import { uploadImages } from "@/lib/api/imageService";
+import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useDropzone } from "react-dropzone";
 
 type CartItem = {
   id: string;
@@ -111,6 +123,24 @@ export function SaleForm({
   const [saleData] = useState<SaleData | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  // Estados para el seguimiento de carga de imágenes
+  const [uploadStatus, setUploadStatus] = useState<{
+    inProgress: boolean;
+    progress: number;
+    error: string | null;
+    uploadedFiles: string[];
+    failedFiles: { file: File; error: string }[];
+  }>({
+    inProgress: false,
+    progress: 0,
+    error: null,
+    uploadedFiles: [],
+    failedFiles: [],
+  });
+
+  const [showUploadError, setShowUploadError] = useState(false);
+  const [forceSubmit, setForceSubmit] = useState(false);
+
   const [newItem, setNewItem] = useState<NewItemForm>({
     id: "",
     type: "",
@@ -120,34 +150,42 @@ export function SaleForm({
     notes: "",
     images: [],
   });
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    setNewItem((prev) => {
+      const existingFiles = prev.images || [];
+      const newFiles = acceptedFiles.filter(
+        (newFile) =>
+          !existingFiles.some(
+            (existingFile) =>
+              existingFile.name === newFile.name &&
+              existingFile.size === newFile.size
+          )
+      );
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      setNewItem((prev) => ({
+      return {
         ...prev,
-        images: [...(prev.images || []), ...files],
-      }));
-      // Reset the file input to allow selecting the same file again if needed
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
+        images: [...existingFiles, ...newFiles],
+      };
+    });
+  }, []); // No necesita dependencias ya que solo usa setNewItem
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/*": [".jpeg", ".jpg", ".png", ".webp"],
+    },
+    multiple: true,
+  });
 
   const removeImage = (index: number) => {
-    setNewItem((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }));
-  };
-
-  const resetFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    setNewItem((prev) => {
+      const newImages = [...prev.images];
+      newImages.splice(index, 1);
+      return {
+        ...prev,
+        images: newImages,
+      };
+    });
   };
 
   const [customerData, setCustomerData] = useState<CustomerData>({
@@ -171,23 +209,24 @@ export function SaleForm({
     let isValid = true;
 
     if (!customerData.name?.trim()) {
-      newErrors.name = 'El nombre es obligatorio';
+      newErrors.name = "El nombre es obligatorio";
       isValid = false;
     }
 
     if (!customerData.email?.trim()) {
-      newErrors.email = 'El correo electrónico es obligatorio';
+      newErrors.email = "El correo electrónico es obligatorio";
       isValid = false;
     } else if (!/\S+@\S+\.\S+/.test(customerData.email)) {
-      newErrors.email = 'El correo electrónico no es válido';
+      newErrors.email = "El correo electrónico no es válido";
       isValid = false;
     }
 
     if (!customerData.phone?.trim()) {
-      newErrors.phone = 'El teléfono es obligatorio';
+      newErrors.phone = "El teléfono es obligatorio";
       isValid = false;
     } else if (!/^[0-9+\-\s]+$/.test(customerData.phone)) {
-      newErrors.phone = 'El teléfono solo puede contener números, guiones y espacios';
+      newErrors.phone =
+        "El teléfono solo puede contener números, guiones y espacios";
       isValid = false;
     }
 
@@ -403,7 +442,6 @@ export function SaleForm({
       notes: "",
       images: [],
     });
-    resetFileInput();
   };
 
   // Agregar ítem al carrito
@@ -476,7 +514,7 @@ export function SaleForm({
     }
 
     // Verificar si hay servicios en la venta
-    const hasServices = selectedItems.some(item => item.type === 'service');
+    const hasServices = selectedItems.some((item) => item.type === "service");
 
     // Datos por defecto del cliente para ventas solo con productos
     const defaultClientInfo = {
@@ -484,31 +522,34 @@ export function SaleForm({
       email: "venta_cliente@example.com",
       phone: "999999999",
       address: "Calle Falsa 123",
-      dni: "11111111"
+      dni: "11111111",
     };
 
     // Si hay servicios, validar los datos del cliente
     if (hasServices) {
       if (!validateForm()) {
-        // Desplazar la vista hacia el primer campo con error
         const firstErrorField = Object.keys(errors)[0];
         if (firstErrorField) {
-          const element = document.getElementById(`customer-${firstErrorField}`);
-          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const element = document.getElementById(
+            `customer-${firstErrorField}`
+          );
+          element?.scrollIntoView({ behavior: "smooth", block: "center" });
           element?.focus();
         }
         return;
       }
     }
 
-    // Función para subir imágenes y obtener URLs
-    const uploadImages = async (images: File[]): Promise<string[]> => {
-      if (!images || images.length === 0) return [];
-      console.log("Subiendo imágenes:", images);
-      return images.map((_, index) => `url${index + 1}.jpg`);
-    };
-
     try {
+      // Iniciar estado de carga
+      setUploadStatus((prev) => ({
+        ...prev,
+        inProgress: true,
+        progress: 0,
+        error: null,
+        failedFiles: [],
+      }));
+
       // Procesar productos
       const productsData = selectedItems
         .filter((item) => item.type === "product")
@@ -517,16 +558,45 @@ export function SaleForm({
           quantity: item.quantity,
         }));
 
-      // Procesar servicios
+      // Procesar servicios con subida de imágenes
       const servicesData = await Promise.all(
         selectedItems
           .filter((item) => item.type === "service")
           .map(async (item) => {
-            const photoUrls = await uploadImages(item.images || []);
+            let photoUrls: string[] = [];
+
+            if (item.images?.length) {
+              const result = await uploadImages(
+                item.images,
+                ({ total, completed }) => {
+                  const progress = Math.round((completed / total) * 100);
+                  setUploadStatus((prev) => ({
+                    ...prev,
+                    progress,
+                  }));
+                }
+              );
+
+              if (result.failed.length > 0 && !forceSubmit) {
+                setUploadStatus((prev) => ({
+                  ...prev,
+                  error: `No se pudieron cargar ${result.failed.length} imágenes`,
+                  failedFiles: result.failed,
+                }));
+                setShowUploadError(true);
+                throw new Error("Error al subir imágenes");
+              }
+
+              photoUrls = result.urls;
+            }
+
             return {
               name: item.name,
               description: item.notes || "Sin descripción",
-              price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
+              price:
+                typeof item.price === "string"
+                  ? parseFloat(item.price)
+                  : item.price,
               type: "REPAIR" as const,
               photoUrls,
             };
@@ -535,18 +605,23 @@ export function SaleForm({
 
       // Validar que haya al menos un producto o servicio
       if (productsData.length === 0 && servicesData.length === 0) {
-        toast.error("La venta debe incluir al menos un producto o servicio válido");
+        toast.error(
+          "La venta debe incluir al menos un producto o servicio válido"
+        );
         return;
       }
 
       // Usar los datos del cliente si existen, de lo contrario usar los valores por defecto
-      const clientInfo = hasServices 
+      const clientInfo = hasServices
         ? {
             name: customerData.name,
             email: customerData.email,
             phone: customerData.phone,
             address: customerData.address || "",
-            dni: customerData.documentType === "dni" ? customerData.documentNumber : undefined,
+            dni:
+              customerData.documentType === "dni"
+                ? customerData.documentNumber
+                : undefined,
           }
         : defaultClientInfo;
 
@@ -572,6 +647,15 @@ export function SaleForm({
           notes: "",
         });
         setPaymentMethod("CASH");
+        setUploadStatus({
+          inProgress: false,
+          progress: 0,
+          error: null,
+          uploadedFiles: [],
+          failedFiles: [],
+        });
+        setShowUploadError(false);
+        setForceSubmit(false);
         toast.success("Venta registrada con éxito");
       }
     } catch (error) {
@@ -579,18 +663,22 @@ export function SaleForm({
       toast.error(
         error instanceof Error ? error.message : "Error al registrar la venta"
       );
+    } finally {
+      setUploadStatus((prev) => ({ ...prev, inProgress: false }));
     }
   };
 
   // Renderizar formulario de cliente
   const renderCustomerForm = () => (
     <div className="space-y-6 p-6 border rounded-lg bg-card shadow-sm">
-      <h3 className="text-xl font-semibold text-foreground">Datos del Cliente</h3>
+      <h3 className="text-xl font-semibold text-foreground">
+        Datos del Cliente
+      </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label htmlFor="name" className="text-foreground/90">
             Nombre completo
-            {selectedItems.some(item => item.type === 'service') && (
+            {selectedItems.some((item) => item.type === "service") && (
               <span className="text-destructive ml-1">*</span>
             )}
           </Label>
@@ -602,7 +690,7 @@ export function SaleForm({
               if (errors.name) setErrors({ ...errors, name: undefined });
             }}
             placeholder="Nombre del cliente"
-            className={`mt-1 ${errors.name ? 'border-destructive' : ''}`}
+            className={`mt-1 ${errors.name ? "border-destructive" : ""}`}
           />
           {errors.name && (
             <p className="text-sm text-destructive mt-1.5">{errors.name}</p>
@@ -612,7 +700,7 @@ export function SaleForm({
         <div className="space-y-2">
           <Label htmlFor="email" className="text-foreground/90">
             Correo electrónico
-            {selectedItems.some(item => item.type === 'service') && (
+            {selectedItems.some((item) => item.type === "service") && (
               <span className="text-destructive ml-1">*</span>
             )}
           </Label>
@@ -625,7 +713,7 @@ export function SaleForm({
               if (errors.email) setErrors({ ...errors, email: undefined });
             }}
             placeholder="correo@ejemplo.com"
-            className={`mt-1 ${errors.email ? 'border-destructive' : ''}`}
+            className={`mt-1 ${errors.email ? "border-destructive" : ""}`}
           />
           {errors.email && (
             <p className="text-sm text-destructive mt-1.5">{errors.email}</p>
@@ -635,7 +723,7 @@ export function SaleForm({
         <div className="space-y-2">
           <Label htmlFor="phone" className="text-foreground/90">
             Teléfono
-            {selectedItems.some(item => item.type === 'service') && (
+            {selectedItems.some((item) => item.type === "service") && (
               <span className="text-destructive ml-1">*</span>
             )}
           </Label>
@@ -648,7 +736,7 @@ export function SaleForm({
               if (errors.phone) setErrors({ ...errors, phone: undefined });
             }}
             placeholder="+51 999 999 999"
-            className={`mt-1 ${errors.phone ? 'border-destructive' : ''}`}
+            className={`mt-1 ${errors.phone ? "border-destructive" : ""}`}
           />
           {errors.phone && (
             <p className="text-sm text-destructive mt-1.5">{errors.phone}</p>
@@ -676,9 +764,9 @@ export function SaleForm({
           </Label>
           <Select
             value={customerData.documentType}
-            onValueChange={(value: "dni" | "ruc" | "ce" | "passport" | "other") =>
-              setCustomerData({ ...customerData, documentType: value })
-            }
+            onValueChange={(
+              value: "dni" | "ruc" | "ce" | "passport" | "other"
+            ) => setCustomerData({ ...customerData, documentType: value })}
           >
             <SelectTrigger className="mt-1">
               <SelectValue placeholder="Seleccionar tipo" />
@@ -715,7 +803,7 @@ export function SaleForm({
           </Label>
           <textarea
             id="notes"
-            value={customerData.notes || ''}
+            value={customerData.notes || ""}
             onChange={(e) =>
               setCustomerData({ ...customerData, notes: e.target.value })
             }
@@ -725,11 +813,15 @@ export function SaleForm({
         </div>
       </div>
 
-      {selectedItems.some(item => item.type === 'service') && (
+      {selectedItems.some((item) => item.type === "service") && (
         <div className="mt-4 p-3 bg-muted/30 rounded-md border border-muted">
           <p className="text-sm text-muted-foreground flex items-center">
             <Info className="h-4 w-4 mr-2 flex-shrink-0" />
-            <span>Los campos marcados con <span className="text-destructive">*</span> son obligatorios cuando se incluyen servicios.</span>
+            <span>
+              Los campos marcados con{" "}
+              <span className="text-destructive">*</span> son obligatorios
+              cuando se incluyen servicios.
+            </span>
           </p>
         </div>
       )}
@@ -802,15 +894,17 @@ export function SaleForm({
         <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
           <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
             <DialogHeader className="px-6 pt-4 pb-2 border-b">
-              <DialogTitle className="text-2xl font-bold">Vista Previa del Comprobante</DialogTitle>
+              <DialogTitle className="text-2xl font-bold">
+                Vista Previa del Comprobante
+              </DialogTitle>
             </DialogHeader>
             <div className="flex-1 overflow-hidden p-0">
-              <PDFViewer 
-                width="100%" 
+              <PDFViewer
+                width="100%"
                 height="100%"
-                style={{ 
-                  border: 'none',
-                  minHeight: 'calc(98vh - 120px)'
+                style={{
+                  border: "none",
+                  minHeight: "calc(98vh - 120px)",
                 }}
               >
                 <ReceiptPDF
@@ -820,7 +914,7 @@ export function SaleForm({
               </PDFViewer>
             </div>
             <div className="p-3 border-t flex justify-end bg-gray-50">
-              <Button 
+              <Button
                 onClick={() => setShowPdfPreview(false)}
                 className="px-6 py-2 text-base"
               >
@@ -941,50 +1035,74 @@ export function SaleForm({
                       <label className="text-sm font-medium">
                         Imágenes del servicio
                       </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleImageChange}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hidden"
-                          id="service-images"
-                          ref={fileInputRef}
-                        />
-                        <label
-                          htmlFor="service-images"
-                          className="cursor-pointer text-sm text-gray-600 hover:text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (fileInputRef.current) {
-                              fileInputRef.current.click();
-                            }
-                          }}
+
+                      {/* Área de dropzone - solo visible si no hay imágenes */}
+                      {(!newItem.images || newItem.images.length === 0) && (
+                        <div
+                          {...getRootProps()}
+                          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
                         >
+                          <input {...getInputProps()} />
                           <div className="flex flex-col items-center justify-center space-y-2">
-                            <Plus className="h-6 w-6" />
-                            <span>Agregar imágenes</span>
-                            <span className="text-xs text-gray-500">
-                              Haz clic o arrastra las imágenes aquí
-                            </span>
+                            <Plus className="h-8 w-8 text-gray-400" />
+                            {isDragActive ? (
+                              <p className="text-sm text-gray-600">
+                                Suelta las imágenes aquí...
+                              </p>
+                            ) : (
+                              <>
+                                <p className="text-sm text-gray-600">
+                                  Arrastra y suelta imágenes aquí, o haz clic
+                                  para seleccionar
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Formatos soportados: .jpeg, .jpg, .png, .webp
+                                </p>
+                              </>
+                            )}
                           </div>
-                        </label>
-                      </div>
-                      {newItem.images?.length > 0 && (
-                        <div className="mt-2">
-                          <h4 className="text-sm font-medium mb-2">
-                            Imágenes seleccionadas ({newItem.images.length})
-                          </h4>
+                        </div>
+                      )}
+
+                      {/* Muestra las miniaturas de las imágenes */}
+                      {newItem.images && newItem.images.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-sm font-medium">
+                              Imágenes seleccionadas ({newItem.images.length})
+                            </h4>
+                            {/* Botón para agregar más imágenes */}
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = "image/*";
+                                input.multiple = true;
+                                input.onchange = (e) => {
+                                  const files = (e.target as HTMLInputElement)
+                                    .files;
+                                  if (files) {
+                                    onDrop(Array.from(files));
+                                  }
+                                };
+                                input.click();
+                              }}
+                              className="text-sm text-primary hover:underline flex items-center cursor-pointer"
+                            >
+                              <Plus className="h-4 w-4 mr-1" /> Agregar más
+                            </div>
+                          </div>
+
                           <div className="flex flex-wrap gap-2">
                             {newItem.images.map((file, index) => (
                               <div
-                                key={index}
+                                key={`${file.name}-${index}`}
                                 className="relative group w-16 h-16 rounded-md overflow-hidden border"
                               >
                                 <Image
                                   src={URL.createObjectURL(file)}
-                                  alt={`Imagen ${index + 1}`}
+                                  alt={`Vista previa ${index + 1}`}
                                   width={64}
                                   height={64}
                                   className="w-full h-full object-cover"
@@ -1128,29 +1246,136 @@ export function SaleForm({
                       </div>
                     </div>
 
-                    <div className="mt-6 space-y-2">
+                    <div className="mt-6 items-center justify-between space-y-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="lg"
                         onClick={() => setShowPdfPreview(true)}
                         disabled={selectedItems.length === 0}
-                        className="gap-1 w-full flex items-center justify-center"
+                        className="gap-1 flex items-center justify-center"
                       >
                         <FileText className="h-4 w-4" />
                         <span>Vista Previa</span>
                       </Button>
+                      <div className="w-full space-y-4">
+                        {uploadStatus.inProgress && (
+                          <div className="w-full bg-background/50 p-3 rounded-lg border">
+                            <div className="flex items-center justify-between text-sm mb-2">
+                              <span className="font-medium">Subiendo imágenes...</span>
+                              <span className="font-semibold">{uploadStatus.progress}%</span>
+                            </div>
+                            <Progress
+                              value={uploadStatus.progress}
+                              className="h-2 w-full"
+                            />
+                          </div>
+                        )}
+                        
+                        {showUploadError && uploadStatus.error && (
+                          <div className="w-full p-4 bg-error-light/10 border-l-4 border-error rounded-r">
+                            <div className="flex items-start">
+                              <XCircle className="h-5 w-5 text-error mt-0.5 flex-shrink-0" />
+                              <div className="ml-3 flex-1">
+                                <div className="text-sm text-foreground font-medium">
+                                  {uploadStatus.error}
+                                </div>
+                                
+                                {uploadStatus.failedFiles.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      Archivos con errores:
+                                    </p>
+                                    <ul className="mt-1 space-y-1.5 max-h-32 overflow-y-auto pr-2">
+                                      {uploadStatus.failedFiles.map((file, index) => (
+                                        <li key={index} className="flex items-start text-sm">
+                                          <X className="h-4 w-4 text-error/80 mt-0.5 mr-1.5 flex-shrink-0" />
+                                          <div className="break-words max-w-full">
+                                            <span className="text-foreground">{file.file.name}</span>
+                                            <span className="text-xs text-muted-foreground block">
+                                              {file.error}
+                                            </span>
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                <div className="mt-4 space-y-2">
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setForceSubmit(true);
+                                      setShowUploadError(false);
+                                      handleSubmit();
+                                    }}
+                                  >
+                                    Continuar sin imágenes
+                                  </Button>
+                                  
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowUploadError(false);
+                                        setUploadStatus(prev => ({
+                                          ...prev,
+                                          error: null,
+                                          failedFiles: []
+                                        }));
+                                      }}
+                                    >
+                                      Reintentar
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full text-destructive border-destructive/50 hover:bg-destructive/5 hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowUploadError(false);
+                                        setUploadStatus(prev => ({
+                                          ...prev,
+                                          inProgress: false,
+                                          progress: 0,
+                                          error: null,
+                                          failedFiles: []
+                                        }));
+                                        // Limpiar las imágenes seleccionadas
+                                        setNewItem(prev => ({
+                                          ...prev,
+                                          images: []
+                                        }));
+                                      }}
+                                    >
+                                      Cancelar
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={handleSubmit}
+                          disabled={selectedItems.length === 0 || uploadStatus.inProgress}
+                        >
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          {uploadStatus.inProgress ? 'Procesando...' : 'Finalizar Venta'}
+                        </Button>
+                      </div>
                       <Button
-                        className="w-full"
-                        size="lg"
-                        onClick={handleSubmit}
-                        disabled={selectedItems.length === 0}
-                      >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        Finalizar Venta
-                      </Button>
-                      <Button
-                        variant="outline"
+                        variant="destructive"
                         className="w-full"
                         onClick={onClose}
                       >

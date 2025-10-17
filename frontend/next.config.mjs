@@ -7,7 +7,19 @@ const nextConfig = {
   },
   // Configuración de imágenes
   images: {
-    domains: ['localhost'],
+    domains: [
+      'localhost',
+      'imgaohzjravmwqklitpq.supabase.co',
+      'imgaohzjravmwqklitpq.supabase.in'
+    ],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'imgaohzjravmwqklitpq.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/sign/services/images/**',
+      },
+    ],
   },
 };
 

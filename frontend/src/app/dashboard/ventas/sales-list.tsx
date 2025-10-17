@@ -106,13 +106,13 @@ export function SalesList({ sales, onNewSale, onViewSale }: SalesListProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return 'Completada';
+        return { text: 'Completado', className: 'bg-green-100 text-green-800' };
       case 'PENDING':
-        return 'Pendiente';
+        return { text: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' };
       case 'CANCELLED':
-        return 'Cancelada';
+        return { text: 'Cancelado', className: 'bg-red-100 text-red-800' };
       default:
-        return status;
+        return { text: status, className: 'bg-gray-100 text-gray-800' };
     }
   };
 
@@ -184,15 +184,8 @@ export function SalesList({ sales, onNewSale, onViewSale }: SalesListProps) {
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge 
-                    variant={order.status === 'COMPLETED' ? 'default' : 'outline'}
-                    className={cn(
-                      order.status === 'COMPLETED' && 'bg-green-100 text-green-800',
-                      order.status === 'PENDING' && 'bg-yellow-100 text-yellow-800',
-                      order.status === 'CANCELLED' && 'bg-red-100 text-red-800'
-                    )}
-                  >
-                    {getStatusBadge(order.status)}
+                  <Badge variant="outline" className={getStatusBadge(order.status).className}>
+                    {getStatusBadge(order.status).text}
                   </Badge>
                 </TableCell>
                 <TableCell>

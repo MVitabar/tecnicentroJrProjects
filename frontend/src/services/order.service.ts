@@ -22,6 +22,46 @@ export interface OrderItem extends OrderItemDto {
   subtotal: number;
 }
 
+interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  dni?: string;
+  ruc?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  userId?: string;
+}
+
+interface Service {
+  id: string;
+  type: 'MAINTENANCE' | 'REPAIR' | 'DIAGNOSTIC' | 'OTHER';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
+  name: string;
+  description?: string;
+  photoUrls?: string[];
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+  orderId: string;
+}
+
+interface OrderProduct {
+  id: string;
+  productId: string;
+  orderId: string;
+  quantity: number;
+  unitPrice: number;
+  product?: {
+    id: string;
+    name: string;
+    price: number;
+    description?: string;
+  };
+}
+
 export interface Order {
   id: string;
   items: OrderItem[];
@@ -32,9 +72,17 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   clientId?: string;
+  client?: Client;
+  services?: Service[];
+  orderProducts?: OrderProduct[];
 }
 
 export const orderService = {
+  async updateOrderStatus(id: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID'): Promise<Order> {
+    const response = await api.patch<Order>(`/orders/${id}/status`, { status });
+    return response.data;
+  },
+
   async createOrder(orderData: {
     clientId?: string;
     clientInfo?: {

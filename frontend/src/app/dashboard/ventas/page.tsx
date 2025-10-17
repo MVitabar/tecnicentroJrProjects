@@ -8,9 +8,9 @@ import type { SaleData } from '@/types/sale.types';
 
 type ServiceType = 'REPAIR' | 'MAINTENANCE' | 'DIAGNOSTIC' | 'OTHER';
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -22,13 +22,50 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { OrderDetailsDialog } from "@/components/orders/OrderDetailsDialog";
 
 export default function VentasPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const handleViewOrder = (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (order) {
+      setSelectedOrder(order);
+      setIsDetailsOpen(true);
+    }
+  };
+
+  const handleOrderUpdate = (updatedOrder: Order) => {
+    setOrders(prevOrders => {
+      const orderExists = prevOrders.some(order => order.id === updatedOrder.id);
+      
+      if (orderExists) {
+        // Actualizar orden existente
+        return prevOrders.map(order => 
+          order.id === updatedOrder.id ? updatedOrder : order
+        );
+      } else {
+        // Si por alguna razón la orden no está en la lista, la agregamos
+        return [updatedOrder, ...prevOrders];
+      }
+    });
+    
+    // Actualizar la orden seleccionada si es la misma
+    if (selectedOrder?.id === updatedOrder.id) {
+      setSelectedOrder(updatedOrder);
+    }
+    
+    // Cerrar el diálogo si se completó la orden
+    if (updatedOrder.status === 'COMPLETED') {
+      setIsDetailsOpen(false);
+    }
+  };
 
   const loadData = useCallback(async (search: string = "") => {
     try {
@@ -153,11 +190,6 @@ export default function VentasPage() {
     }
   };
 
-  const handleViewOrder = (orderId: string) => {
-    console.log("Ver orden:", orderId);
-    toast.info(`Visualizando orden ${orderId}`);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -167,98 +199,192 @@ export default function VentasPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between gap-4">
-            <div>
-              <CardTitle>Ventas</CardTitle>
+    <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <Card className="shadow-sm">
+        <CardHeader className="p-4 sm:p-6 pb-0 sm:pb-0">
+          <div className="flex flex-col space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="space-y-2">
+                <CardTitle className="text-xl sm:text-2xl">Ventas</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Administra y revisa el historial de ventas
+                </p>
+              </div>
+              
+              <div className="w-full sm:w-auto">
+                <Button 
+                  onClick={() => setIsFormOpen(true)}
+                  className="w-full sm:w-auto"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span>Nueva Venta</span>
+                </Button>
+              </div>
             </div>
-            <form onSubmit={handleSearch} className="flex gap-2">
+            
+            <form onSubmit={handleSearch} className="pt-2">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Buscar ventas..."
-                  className="pl-8 w-full md:w-[200px] lg:w-[300px]"
+                  placeholder="Buscar por ID, cliente o método de pago..."
+                  className="pl-9 w-full"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button type="submit" variant="outline">
-                Buscar
-              </Button>
-              <Button onClick={() => setIsFormOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Venta
-              </Button>
             </form>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Método de Pago</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="w-[100px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.length > 0 ? (
-                  orders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">
-                        {order.id.substring(0, 8)}...
-                      </TableCell>
-                      <TableCell>
-                        {order.createdAt
-                          ? format(new Date(order.createdAt), "PP", {
-                              locale: es,
-                            })
-                          : "N/A"}
-                      </TableCell>
-                      <TableCell>{order.paymentMethod}</TableCell>
-                      <TableCell className="text-right">
-                        ${order.totalAmount.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewOrder(order.id)}
-                        >
-                          Ver
-                        </Button>
+        
+        <CardContent className="p-0 sm:p-6 pt-0">
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table className="w-full">
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-[1/8] px-2 text-center">ID</TableHead>
+                    <TableHead className="w-[1/8] px-2 text-center">Fecha</TableHead>
+                    <TableHead className="min-w-[150px] px-2 text-center">Cliente</TableHead>
+                    <TableHead className="w-[1/8] px-2 text-center">Productos</TableHead>
+                    <TableHead className="w-[1/8] px-2 text-center">Servicios</TableHead>
+                    <TableHead className="w-[1/8] px-2 text-center">Estado</TableHead>
+                    <TableHead className="w-[100px] px-2 text-center">Total</TableHead>
+                    <TableHead className="w-[60px] px-2 text-center">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.length > 0 ? (
+                    orders.map((order) => {
+                      
+                      const shortDate = order.createdAt
+                        ? format(new Date(order.createdAt), 'dd/MM/yy')
+                        : 'N/A';
+                      
+                      const statusColors = {
+                        COMPLETED: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                        PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+                        CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                      };
+                      
+                      const statusText = {
+                        COMPLETED: 'Completado',
+                        PENDING: 'Pendiente',
+                        CANCELLED: 'Cancelado'
+                      };
+                        
+                      const clientName = order.client?.name || 'Sin cliente';
+                      const productCount = order.orderProducts?.length || 0;
+                      const serviceCount = order.services?.length || 0;
+                      
+                      return (
+                        <TableRow key={order.id} className="hover:bg-muted/50">
+                          <TableCell className="px-2 py-3 text-center">
+                            <div className="text-sm font-medium" title={order.id}>
+                              {order.id.substring(0, 4)}...
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            <div className="flex flex-col">
+                              <span className="text-sm">{shortDate}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(order.createdAt), 'HH:mm')}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center ">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium truncate">{clientName}</span>
+                              {order.client?.phone && (
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {order.client.phone}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            {productCount > 0 ? (
+                              <Badge variant="outline" className="text-xs">
+                                {productCount} {productCount === 1 ? 'producto' : 'productos'}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            {serviceCount > 0 ? (
+                              <Badge variant="outline" className="text-xs">
+                                {serviceCount} {serviceCount === 1 ? 'servicio' : 'servicios'}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            <span 
+                              className={`inline-flex items-center justify-center w-full px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}
+                              title={statusText[order.status]}
+                            >
+                              {statusText[order.status]}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            <span className="text-sm font-medium">
+                              ${order.totalAmount.toFixed(2)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 mx-auto"
+                              onClick={() => handleViewOrder(order.id)}
+                              title="Ver detalles"
+                            >
+                              <Search className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                        No se encontraron ventas
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
-                      No se encontraron ventas
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
+          
+          {orders.length > 0 && (
+            <div className="mt-4 text-sm text-muted-foreground text-center sm:text-right">
+              Mostrando {orders.length} {orders.length === 1 ? 'venta' : 'ventas'}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {selectedOrder && (
+        <OrderDetailsDialog
+          open={isDetailsOpen}
+          onOpenChange={setIsDetailsOpen}
+          order={selectedOrder}
+          onOrderUpdate={handleOrderUpdate}
+        />
+      )}
 
       <SaleForm
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         onSubmit={async (data) => {
-          // Transform the data to match the expected SaleData type
           const transformedData: SaleData = {
             ...data,
             products: data.products.map(p => ({
               ...p,
-              
             }))
           };
           return handleCreateOrder(transformedData);

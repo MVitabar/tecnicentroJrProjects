@@ -65,9 +65,29 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
 
   if (!currentService) return null;
 
+  // Función para validar URLs de imágenes
+  const isValidImageUrl = (url: string | undefined): boolean => {
+    if (!url) return false;
+    try {
+      // Verificar si es una URL válida
+      new URL(url);
+      // Verificar si es una URL base64 (para imágenes en base64)
+      if (url.startsWith('data:image/')) return true;
+      // Verificar extensiones de imagen comunes
+      return /\.(jpeg|jpg|gif|png|webp|svg|avif)$/i.test(url.split('?')[0]);
+    } catch {
+      return false;
+    }
+  };
+
+  // Filtrar solo URLs de imágenes válidas
+  const validPhotoUrls = (currentService.photoUrls || []).filter(url => 
+    url && isValidImageUrl(url)
+  );
+
   // Función para renderizar la galería de imágenes
   const renderImageGallery = () => {
-    if (!currentService.photoUrls || currentService.photoUrls.length === 0) {
+    if (validPhotoUrls.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center p-8 border rounded-lg bg-muted/20">
           <ImageOff className="h-12 w-12 text-muted-foreground mb-2" />
@@ -81,31 +101,40 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
     return (
       <div className="space-y-2">
         <div className="grid grid-cols-3 gap-2">
-          {currentService.photoUrls.map((url, index) => (
+          {validPhotoUrls.map((url, index) => (
             <div 
-              key={index} 
-              className="relative aspect-square group cursor-pointer"
-              onClick={() => {
-                setSelectedImage(url);
-                setIsImageViewerOpen(true);
-              }}
+              key={`${url}-${index}`} 
+              className="relative aspect-square group"
             >
-              <div className="absolute inset-0 rounded-md overflow-hidden border">
-                <Image
-                  src={url}
-                  alt={`Imagen del servicio ${index + 1}`}
-                  fill
-                  className="object-cover"
-                  onLoad={() => setIsImageLoading(false)}
-                  onError={() => setIsImageLoading(false)}
-                />
-                {isImageLoading && (
-                  <Skeleton className="absolute inset-0 w-full h-full" />
-                )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <ZoomIn className="h-6 w-6 text-white" />
+              <button
+                className="absolute inset-0 w-full h-full"
+                onClick={() => {
+                  setSelectedImage(url);
+                  setIsImageViewerOpen(true);
+                }}
+                aria-label={`Ver imagen ${index + 1} en tamaño completo`}
+              >
+                <div className="absolute inset-0 rounded-md overflow-hidden border">
+                  <Image
+                    src={url}
+                    alt={`Imagen del servicio ${index + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      setIsImageLoading(false);
+                    }}
+                  />
+                  {isImageLoading && (
+                    <Skeleton className="absolute inset-0 w-full h-full" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <ZoomIn className="h-6 w-6 text-white" />
+                  </div>
                 </div>
-              </div>
+              </button>
             </div>
           ))}
         </div>

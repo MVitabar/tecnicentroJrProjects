@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -138,12 +137,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Contraseña</Label>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  ¿Olvidaste tu contraseña?
-                </Link>
+                
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -172,19 +166,10 @@ export default function LoginPage() {
               {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </Button>
             
-            <div className="text-center text-sm text-muted-foreground">
-              <p>Usuario de prueba:</p>
-              <p>Email: <strong>test@example.com</strong></p>
-              <p>Contraseña: <strong>password123</strong></p>
-            </div>
+            
           </form>
 
-          <div className="mt-4 text-center text-sm">
-            ¿No tienes una cuenta?{' '}
-            <Link href="/register" className="font-medium text-primary hover:underline">
-              Regístrate
-            </Link>
-          </div>
+          
         </div>
 
         

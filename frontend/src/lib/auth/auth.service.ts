@@ -7,6 +7,8 @@ interface LoginCredentials {
 
 interface AuthResponse {
   access_token: string;
+  refresh_token: string;
+  expires_in: number;
   user: {
     id: string;
     email: string;
@@ -14,6 +16,12 @@ interface AuthResponse {
     role: string;
     verified?: boolean;
   };
+}
+
+interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 
 export const authService = {
@@ -40,35 +48,45 @@ export const authService = {
       console.log('Role recibido del servidor:', data.user.role);
     }
     
-    // Store token with consistent key 'auth_token'
-    localStorage.setItem('auth_token', data.access_token);
+    // Store tokens and user data
+    this.setSession(data);
     
-    // Store user data for easy access
+    return data;
+  },
+
+  setSession(authResult: AuthResponse): void {
+    if (typeof window === 'undefined') return;
+    
+    // Calculate expiration time (current time + expires_in seconds)
+    const expiresAt = Date.now() + (authResult.expires_in * 1000);
+    
+    // Store tokens and expiration
+    localStorage.setItem('auth_token', authResult.access_token);
+    localStorage.setItem('refresh_token', authResult.refresh_token);
+    localStorage.setItem('expires_at', expiresAt.toString());
+    
+    // Store user data
     const userData = {
-      id: data.user.id,
-      email: data.user.email,
-      name: data.user.name || '',
-      role: data.user.role.toUpperCase(), // Ensure role is uppercase
-      verified: data.user.verified || false
+      id: authResult.user.id,
+      email: authResult.user.email,
+      name: authResult.user.name || '',
+      role: authResult.user.role.toUpperCase(),
+      verified: authResult.user.verified || false,
     };
     
-    console.log('Guardando datos del usuario en localStorage:', JSON.stringify(userData, null, 2));
     localStorage.setItem('user', JSON.stringify(userData));
-    
-    // Verificar lo que se guardó
-    const storedUser = localStorage.getItem('user');
-    console.log('Datos guardados en localStorage:', storedUser);
-    
-    return {
-      access_token: data.access_token,
-      user: userData
-    };
   },
 
   logout(): void {
-    // Clear all auth-related data
+    if (typeof window === 'undefined') return;
+    
+    // Clear all auth data
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('expires_at');
     localStorage.removeItem('user');
+    
+    // Redirect to login page
     window.location.href = '/login';
   },
 
@@ -77,19 +95,62 @@ export const authService = {
     return localStorage.getItem('auth_token');
   },
 
+  getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('refresh_token');
+  },
+
+  isTokenExpired(): boolean {
+    if (typeof window === 'undefined') return true;
+    const expiresAt = localStorage.getItem('expires_at');
+    if (!expiresAt) return true;
+    return Date.now() > parseInt(expiresAt, 10);
+  },
+  
+  isAuthenticated(): boolean {
+    if (typeof window === 'undefined') return false;
+    const token = this.getToken();
+    return !!token && !this.isTokenExpired();
+  },
+
+  async refreshToken(): Promise<RefreshTokenResponse | null> {
+    if (typeof window === 'undefined') return null;
+    
+    const refreshToken = this.getRefreshToken();
+    
+    if (!refreshToken) {
+      this.logout();
+      return null;
+    }
+
+    try {
+      const { data } = await api.post<RefreshTokenResponse>('/auth/refresh', {
+        refreshToken: refreshToken
+      });
+
+      // Update stored tokens and expiration
+      localStorage.setItem('auth_token', data.accessToken);
+      localStorage.setItem('refresh_token', data.refreshToken);
+      
+      const expiresAt = Date.now() + (data.expiresIn * 1000);
+      localStorage.setItem('expires_at', expiresAt.toString());
+
+      return data;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      this.logout();
+      return null;
+    }
+  },
+  
   getCurrentUser() {
     if (typeof window === 'undefined') return null;
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   },
-
-  // Add this method to get auth headers for API calls
+  
   getAuthHeader() {
     const token = this.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
-  },
-
-  isAuthenticated(): boolean {
-    return !!this.getToken();
-  },
+  }
 };

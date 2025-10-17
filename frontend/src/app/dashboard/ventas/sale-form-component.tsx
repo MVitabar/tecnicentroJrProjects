@@ -68,7 +68,7 @@ type SaleData = {
     name: string;
     description: string;
     price: number;
-    type: 'REPAIR' | 'MAINTENANCE' | 'INSTALLATION' | 'OTHER';
+    type: "REPAIR" | "MAINTENANCE" | "INSTALLATION" | "OTHER";
     photoUrls: string[];
   }>;
 };
@@ -173,6 +173,8 @@ export function SaleForm({
   const handlePrint = useReactToPrint(
     printOptions as Parameters<typeof useReactToPrint>[0]
   );
+
+  
 
   // Efecto para manejar la impresión después de guardar la venta
   useEffect(() => {
@@ -304,7 +306,7 @@ export function SaleForm({
 
     if (newItem.type === "product") {
       // Para productos, necesitamos el ID del producto
-      const product = products.find(p => p.id === newItem.id);
+      const product = products.find((p) => p.id === newItem.id);
       if (!product) return;
 
       handleAddItem(
@@ -320,8 +322,10 @@ export function SaleForm({
       );
     } else if (newItem.type === "service") {
       // Para servicios, generamos un ID temporal
-      const serviceId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+      const serviceId = `temp-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       handleAddItem(
         {
           id: serviceId,
@@ -373,7 +377,9 @@ export function SaleForm({
         if (type === "product") {
           return i.id === item.id && i.type === type;
         } else if (type === "service") {
-          return i.name.toLowerCase() === item.name.toLowerCase() && i.type === type;
+          return (
+            i.name.toLowerCase() === item.name.toLowerCase() && i.type === type
+          );
         }
         return false;
       });
@@ -382,17 +388,18 @@ export function SaleForm({
 
       if (existingItem) {
         return prev.map((i: CartItem) => {
-          const isSameItem = 
-            type === "product" 
+          const isSameItem =
+            type === "product"
               ? i.id === item.id && i.type === type
-              : i.name.toLowerCase() === item.name.toLowerCase() && i.type === type;
+              : i.name.toLowerCase() === item.name.toLowerCase() &&
+                i.type === type;
 
           if (!isSameItem) return i;
-          
+
           const updatedItem = {
             ...i,
             quantity: i.quantity + quantityToAdd,
-            notes: type === "service" ? (notes || i.notes || '') : i.notes,
+            notes: type === "service" ? notes || i.notes || "" : i.notes,
           };
 
           if (type === "service" && images.length > 0) {
@@ -412,7 +419,7 @@ export function SaleForm({
         type,
         notes: type === "service" ? notes : "",
         ...(type === "product" && { productId: item.productId || item.id }),
-        ...(type === "service" && { images })
+        ...(type === "service" && { images }),
       } as CartItem;
 
       return [...prev, newItem];
@@ -429,7 +436,7 @@ export function SaleForm({
     // Función para subir imágenes y obtener URLs
     const uploadImages = async (images: File[]): Promise<string[]> => {
       if (!images || images.length === 0) return [];
-      
+
       // En una implementación real, aquí iría la lógica para subir las imágenes
       // a un servicio de almacenamiento como AWS S3, Cloudinary, etc.
       // Por ahora, simulamos la subida con URLs de ejemplo
@@ -440,22 +447,25 @@ export function SaleForm({
     try {
       // Procesar productos
       const productsData = selectedItems
-        .filter(item => item.type === "product")
-        .map(item => ({
+        .filter((item) => item.type === "product")
+        .map((item) => ({
           productId: item.id,
-          quantity: item.quantity
+          quantity: item.quantity,
         }));
 
       // Procesar servicios
       const servicesData = await Promise.all(
         selectedItems
-          .filter(item => item.type === "service")
+          .filter((item) => item.type === "service")
           .map(async (item) => {
             const photoUrls = await uploadImages(item.images || []);
             return {
               name: item.name,
               description: item.notes || "Sin descripción",
-              price: typeof item.price === 'string' ? parseFloat(item.price) : item.price,
+              price:
+                typeof item.price === "string"
+                  ? parseFloat(item.price)
+                  : item.price,
               type: "REPAIR" as const,
               photoUrls,
             };
@@ -464,7 +474,9 @@ export function SaleForm({
 
       // Validar que haya al menos un producto o servicio
       if (productsData.length === 0 && servicesData.length === 0) {
-        toast.error("La venta debe incluir al menos un producto o servicio válido");
+        toast.error(
+          "La venta debe incluir al menos un producto o servicio válido"
+        );
         return;
       }
 
@@ -474,7 +486,10 @@ export function SaleForm({
           email: customerData.email || "",
           phone: customerData.phone || "",
           address: customerData.address || "",
-          dni: customerData.documentType === "dni" ? customerData.documentNumber : undefined,
+          dni:
+            customerData.documentType === "dni"
+              ? customerData.documentNumber
+              : undefined,
         },
         products: productsData,
         services: servicesData,
@@ -482,7 +497,7 @@ export function SaleForm({
 
       console.log("Enviando datos de venta:", saleData);
       const success = await onSubmit(saleData);
-      
+
       if (success) {
         // Limpiar el formulario después de una venta exitosa
         setSelectedItems([]);
@@ -500,9 +515,13 @@ export function SaleForm({
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
-      toast.error(error instanceof Error ? error.message : "Error al registrar la venta");
+      toast.error(
+        error instanceof Error ? error.message : "Error al registrar la venta"
+      );
     }
   };
+
+  
 
   // Renderizar formulario de cliente
   const renderCustomerForm = () => (

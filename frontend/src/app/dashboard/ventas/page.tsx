@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { orderService, type Order } from "@/services/order.service";
 import { productService, type Product } from "@/services/product.service";
 import { SaleForm } from "./sale-form-component";
-import type { SaleData, ProductOrder } from '@/types/sale.types';
+import type { SaleData } from '@/types/sale.types';
 
-type ServiceType = 'REPAIR' | 'MAINTENANCE' | 'INSTALLATION' | 'OTHER';
+type ServiceType = 'REPAIR' | 'MAINTENANCE' | 'DIAGNOSTIC' | 'OTHER';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -66,37 +66,82 @@ export default function VentasPage() {
 
   const handleCreateOrder = async (orderData: SaleData) => {
     try {
-      // Transformar los datos al formato esperado por orderService.createOrder
-      const transformedData = {
-        clientInfo: {
-          name: orderData.clientInfo?.name || 'Cliente Ocasional',
-          email: orderData.clientInfo?.email || '',
-          phone: orderData.clientInfo?.phone || '',
-          address: orderData.clientInfo?.address,
-          dni: orderData.clientInfo?.dni
-        },
-        products: (orderData.products || []).map(product => {
-          // Ensure all required properties are present with proper types
-          const productOrder: ProductOrder = {
-            productId: product.productId,
-            quantity: product.quantity || 1,
-           
-          };
-          return productOrder;
-        }),
-        services: (orderData.services || []).map(service => ({
-          name: service.name,
-          description: service.description || '',
-          price: service.price,
-          type: (service.type || 'REPAIR') as ServiceType,
-          photoUrls: service.photoUrls || []
-        })),
-       
+      console.log('Datos recibidos del formulario:', orderData);
+      
+      // Asegurarse de que los productos y servicios sean arrays
+      const products = Array.isArray(orderData.products) ? orderData.products : [];
+      const services = Array.isArray(orderData.services) 
+        ? orderData.services as Array<{
+            name: string;
+            description?: string;
+            price: number;
+            type?: string;
+            photoUrls?: string[];
+          }> 
+        : [];
+
+      // Función para asegurar que el tipo de servicio sea válido
+      const getValidServiceType = (type?: string): ServiceType => {
+        const validTypes: ServiceType[] = ['REPAIR', 'MAINTENANCE', 'DIAGNOSTIC', 'OTHER'];
+        return validTypes.includes(type as ServiceType) ? type as ServiceType : 'REPAIR';
       };
 
-      console.log('Enviando datos transformados:', transformedData);
+      // Transformar los datos al formato esperado por el backend
+      const orderDataForBackend: {
+        clientInfo?: {
+          name: string;
+          email?: string;
+          phone?: string;
+          address?: string;
+          dni?: string;
+          ruc?: string;
+        };
+        products?: Array<{
+          productId: string;
+          quantity: number;
+        }>;
+        services?: Array<{
+          name: string;
+          description?: string;
+          price: number;
+          type: 'REPAIR' | 'MAINTENANCE' | 'DIAGNOSTIC' | 'OTHER';
+          photoUrls?: string[];
+        }>;
+        status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
+      } = {
+        clientInfo: {
+          name: orderData.clientInfo?.name || 'Cliente Ocasional',
+          ...(orderData.clientInfo?.email && { email: orderData.clientInfo.email }),
+          ...(orderData.clientInfo?.phone && { phone: orderData.clientInfo.phone }),
+          ...(orderData.clientInfo?.address && { address: orderData.clientInfo.address }),
+          ...(orderData.clientInfo?.dni && { dni: orderData.clientInfo.dni }),
+          ...(orderData.clientInfo?.ruc && { ruc: orderData.clientInfo.ruc })
+        },
+        status: 'PENDING' as const
+      };
+
+      // Agregar productos si existen
+      if (products.length > 0) {
+        orderDataForBackend.products = products.map(product => ({
+          productId: product.productId,
+          quantity: product.quantity || 1
+        }));
+      }
+
+      // Agregar servicios si existen
+      if (services.length > 0) {
+        orderDataForBackend.services = services.map(service => ({
+          name: service.name || 'Servicio sin nombre',
+          ...(service.description && { description: service.description }),
+          price: service.price || 0,
+          type: getValidServiceType(service.type),
+          ...(service.photoUrls && service.photoUrls.length > 0 && { photoUrls: service.photoUrls })
+        }));
+      }
+
+      console.log('Enviando datos al servicio de órdenes:', orderDataForBackend);
       
-      const newOrder = await orderService.createOrder(transformedData);
+      const newOrder = await orderService.createOrder(orderDataForBackend);
       setOrders(prevOrders => [newOrder, ...prevOrders]);
       setIsFormOpen(false);
       toast.success('Orden registrada exitosamente');

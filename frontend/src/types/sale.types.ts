@@ -28,6 +28,7 @@ export interface ClientInfo {
   phone: string;
   address?: string;
   dni?: string;
+  ruc?: string;
   notes?: string;
 }
 

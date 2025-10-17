@@ -156,17 +156,57 @@ export const clientService = {
   async deleteClient(id: string): Promise<void> {
     console.log('Eliminando cliente con ID:', id);
     try {
-      await api.delete(`/clientes/${id}`);
-      console.log('Cliente eliminado exitosamente');
+      const response = await api.delete(`/clientes/${id}`);
+      console.log('Respuesta del servidor al eliminar:', response);
+      if (response.status >= 200 && response.status < 300) {
+        console.log('Cliente eliminado exitosamente');
+        return;
+      }
+      throw new Error(`Error inesperado al eliminar: ${response.status} ${response.statusText}`);
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>;
-      console.error('Error al eliminar cliente:', {
+      
+      // Detallar el error para depuración
+      const errorDetails = {
         id,
-        error: axiosError.message,
-        response: axiosError.response?.data,
-        status: axiosError.response?.status
-      });
-      throw new Error(axiosError.response?.data?.message || 'No se pudo eliminar el cliente. Por favor, intente nuevamente.');
+        message: axiosError.message,
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        responseData: axiosError.response?.data,
+        requestConfig: {
+          url: axiosError.config?.url,
+          method: axiosError.config?.method,
+          headers: axiosError.config?.headers
+        }
+      };
+      
+      console.error('Error detallado al eliminar cliente:', errorDetails);
+      
+      // Proporcionar un mensaje de error más descriptivo
+      let errorMessage = 'No se pudo eliminar el cliente. ';
+      
+      if (axiosError.response) {
+        // El servidor respondió con un código de estado fuera del rango 2xx
+        if (axiosError.response.status === 404) {
+          errorMessage = 'El cliente no fue encontrado o ya fue eliminado.';
+        } else if (axiosError.response.status === 403) {
+          errorMessage = 'No tienes permiso para eliminar este cliente.';
+        } else if (axiosError.response.status === 400) {
+          errorMessage = 'Solicitud incorrecta. Verifica los datos e inténtalo de nuevo.';
+        } else if (axiosError.response.data?.message) {
+          errorMessage += `Error: ${axiosError.response.data.message}`;
+        } else {
+          errorMessage += `Error del servidor (${axiosError.response.status}).`;
+        }
+      } else if (axiosError.request) {
+        // La solicitud fue hecha pero no se recibió respuesta
+        errorMessage = 'No se recibió respuesta del servidor. Verifica tu conexión a internet.';
+      } else {
+        // Algo pasó en la configuración de la solicitud
+        errorMessage = `Error al configurar la solicitud: ${axiosError.message}`;
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 };

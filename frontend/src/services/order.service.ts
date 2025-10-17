@@ -36,61 +36,93 @@ export interface Order {
 
 export const orderService = {
   async createOrder(orderData: {
-    clientInfo: {
+    clientId?: string;
+    clientInfo?: {
       name: string;
-      email: string;
-      phone: string;
+      email?: string;
+      phone?: string;
       address?: string;
       dni?: string;
+      ruc?: string;
     };
-    products: Array<{
+    products?: Array<{
       productId: string;
       quantity: number;
-      unitPrice?: number;
     }>;
-    services: Array<{
+    services?: Array<{
       name: string;
-      description: string;
+      description?: string;
       price: number;
-      type: 'REPAIR' | 'MAINTENANCE' | 'INSTALLATION' | 'OTHER';
-      photoUrls: string[];
+      type: 'MAINTENANCE' | 'REPAIR' | 'DIAGNOSTIC' | 'OTHER';
+      photoUrls?: string[];
     }>;
+    status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
   }): Promise<Order> {
     try {
       const token = localStorage.getItem("auth_token");
       
-      // Asegurarse de que products y services sean arrays
-      const products = Array.isArray(orderData.products) ? orderData.products : [];
-      const services = Array.isArray(orderData.services) ? orderData.services : [];
+      // Validar que al menos se proporcione clientId o clientInfo
+      if (!orderData.clientId && !orderData.clientInfo) {
+        throw new Error('Se requiere clientId o clientInfo');
+      }
 
-      // // Calcular totales con valores por defecto
-      // const productsTotal = products.reduce((sum, product) => {
-      //   const price = product.unitPrice || 0;
-      //   return sum + (product.quantity * price);
-      // }, 0);
+      // Validar que se proporcione al menos un producto o servicio
+      if ((!orderData.products || orderData.products.length === 0) && 
+          (!orderData.services || orderData.services.length === 0)) {
+        throw new Error('Se requiere al menos un producto o servicio');
+      }
 
-      // const servicesTotal = services.reduce((sum, service) => sum + service.price, 0);
+      // Build the order data object
+      const orderDataToSend = {
+        ...(orderData.clientInfo && {
+          clientInfo: {
+            name: orderData.clientInfo.name,
+            ...(orderData.clientInfo.email && { email: orderData.clientInfo.email }),
+            ...(orderData.clientInfo.phone && { phone: orderData.clientInfo.phone }),
+            ...(orderData.clientInfo.address && { address: orderData.clientInfo.address }),
+            ...(orderData.clientInfo.dni && { dni: orderData.clientInfo.dni }),
+            ...(orderData.clientInfo.ruc && { ruc: orderData.clientInfo.ruc })
+          }
+        }),
+        ...(orderData.clientId && { clientId: orderData.clientId }),
+        ...(orderData.products && orderData.products.length > 0 && {
+          products: orderData.products.map(p => ({
+            productId: p.productId,
+            quantity: p.quantity
+          }))
+        }),
+        ...(orderData.services && orderData.services.length > 0 && {
+          services: orderData.services.map(s => ({
+            name: s.name,
+            ...(s.description && { description: s.description }),
+            price: s.price,
+            type: s.type,
+            ...(s.photoUrls && s.photoUrls.length > 0 && { photoUrls: s.photoUrls })
+          }))
+        }),
+        status: orderData.status || 'PENDING'
+      };
 
-      // Estructura de datos para el backend
-      const backendData = {
-        clientInfo: orderData.clientInfo || {},
-        products: products,
-        services: services,
-        status: 'PENDING',
+      // Create the request body with createOrderDto as a JSON string
+      const requestBody = {
+        createOrderDto: JSON.stringify(orderDataToSend)
       };
 
       console.group('Sending Order Data to Backend');
       console.log('Endpoint:', 'orders/create');
       console.log('Method:', 'POST');
-      console.log('Request Data:', JSON.stringify(backendData, null, 2));
+      console.log('Request Data:', JSON.stringify(requestBody, null, 2));
       console.groupEnd();
 
-      const response = await api.post<Order>("orders/create", backendData, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+      const response = await api.post<Order>("orders/create", 
+        requestBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
         }
-      });
+      );
 
       console.group("Order Created Successfully");
       console.log("Response Status:", response.status);

@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { clientService } from '@/services/client.service';
 import { Client } from '@/types/client.types';
+import { EditClientModal } from '@/components/modals/EditClientModal';
 
 export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -30,10 +31,25 @@ export default function ClientesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const limit = 10;
 
   const router = useRouter();
   const { toast } = useToast();
+
+  const handleEditClient = (client: Client) => {
+    setEditingClient(client);
+    setIsEditModalOpen(true);
+  };
+
+  const handleClientUpdated = (updatedClient: Client) => {
+    setClients(clients.map(client => 
+      client.id === updatedClient.id ? updatedClient : client
+    ));
+    setIsEditModalOpen(false);
+    setEditingClient(null);
+  };
 
   const loadClients = useCallback(async () => {
     try {
@@ -160,7 +176,7 @@ export default function ClientesPage() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => router.push(`/dashboard/clientes/editar/${client.id}`)}
+                            onClick={() => handleEditClient(client)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -235,6 +251,12 @@ export default function ClientesPage() {
           )}
         </CardContent>
       </Card>
+      <EditClientModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        client={editingClient}
+        onClientUpdated={handleClientUpdated}
+      />
     </div>
   );
 }

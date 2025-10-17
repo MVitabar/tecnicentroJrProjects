@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -16,15 +16,22 @@ const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
     backgroundColor: '#ffffff',
-    padding: 20,
+    padding: 10,
     fontFamily: 'Helvetica',
+    fontSize: 8,
+  },
+  receiptContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    padding: 8,
   },
   receipt: {
-    marginBottom: 20,
+    marginBottom: 10,
     border: '1px solid #e2e8f0',
-    borderRadius: 4,
-    padding: 15,
+    borderRadius: 3,
+    padding: 8,
     position: 'relative',
+    fontSize: 8,
   },
   receiptCopy: {
     fontSize: 10,
@@ -53,14 +60,15 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   section: {
-    marginBottom: 10,
+    marginBottom: 6,
+    fontSize: 8,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 3,
     borderBottom: '1px solid #e2e8f0',
-    paddingBottom: 3,
+    paddingBottom: 2,
   },
   row: {
     flexDirection: 'row',
@@ -77,8 +85,9 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
-    fontSize: 9,
+    marginBottom: 0.5,
+    fontSize: 7,
+    lineHeight: 1.1,
   },
   itemName: {
     flex: 3,
@@ -94,18 +103,18 @@ const styles = StyleSheet.create({
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 5,
+    marginTop: 8,
+    paddingTop: 4,
     borderTop: '1px dashed #cbd5e1',
     fontWeight: 'bold',
-    fontSize: 11,
+    fontSize: 10,
   },
   footer: {
-    marginTop: 'auto',
-    fontSize: 8,
+    marginTop: 4,
+    fontSize: 6,
     textAlign: 'center',
     color: '#64748b',
-    paddingTop: 10,
+    paddingTop: 4,
     borderTop: '1px solid #e2e8f0',
   },
   divider: {
@@ -204,6 +213,70 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
         </View>
       </View>
 
+      {copy === 'ORIGINAL' && (
+        <View style={{
+          marginTop: 12,
+          padding: 8,
+          border: '1px solid #e2e8f0',
+          borderRadius: 4,
+          backgroundColor: '#f8fafc'
+        }}>
+          <Text style={{
+            fontSize: 9,
+            fontWeight: 'bold',
+            marginBottom: 6,
+            color: '#1e293b',
+            textAlign: 'center',
+            textTransform: 'uppercase'
+          }}>
+            Datos de Seguridad
+          </Text>
+          
+          <View style={{ marginBottom: 8 }}>
+            <View style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 8, marginBottom: 2, fontWeight: 'semibold' }}>PIN/Contraseña:</Text>
+              <View style={{ 
+                borderBottom: '1px solid #cbd5e1', 
+                height: 14,
+                marginBottom: 8
+              }}></View>
+            </View>
+            
+            <View>
+              <Text style={{ fontSize: 8, marginBottom: 4, fontWeight: 'semibold' }}>Patrón de desbloqueo:</Text>
+              <View style={{ 
+                width: '100%', 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 4
+              }}>
+                <View style={{
+                  width: 60,
+                  height: 60,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 4
+                }}>
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image 
+                    src="/9-puntos.png"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+      
       <View style={styles.footer}>
         <Text>{businessInfo.footerText}</Text>
         <Text>Gracias por su compra - {copy === 'ORIGINAL' ? 'CLIENTE' : 'COMERCIO'}</Text>
@@ -214,11 +287,33 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.halfPage}>
+        {/* Primera copia (ORIGINAL) */}
+        <View style={{ marginBottom: 15 }}>
           {renderReceipt('ORIGINAL')}
         </View>
-        <View style={styles.divider} />
-        <View style={styles.halfPage}>
+        
+        {/* Línea divisoria */}
+        <View style={{ 
+          borderTop: '1px dashed #94a3b8', 
+          margin: '15px 0',
+          position: 'relative'
+        }}>
+          <Text style={{
+            position: 'absolute',
+            top: '-8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#ffffff',
+            padding: '0 10px',
+            fontSize: 8,
+            color: '#64748b'
+          }}>
+            COPIA - COMERCIO
+          </Text>
+        </View>
+        
+        {/* Segunda copia (DUPLICADO) */}
+        <View>
           {renderReceipt('DUPLICADO')}
         </View>
       </Page>

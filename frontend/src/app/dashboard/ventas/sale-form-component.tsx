@@ -2,15 +2,29 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { Product } from "@/types/product.types";
-import { Plus, Minus, Trash2, ShoppingCart, X } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingCart, X, FileText, Info } from "lucide-react";
+import { type CustomerData } from "./customer-form";
 import { Button } from "@/components/ui/button";
-import { CustomerForm, type CustomerData } from "./customer-form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useReactToPrint } from "react-to-print";
 import Image from "next/image";
 import { toast } from "sonner";
-
-
-
+import { PDFViewer } from "@react-pdf/renderer";
+import ReceiptPDF from "./ReceiptPDF";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type CartItem = {
   id: string;
@@ -83,12 +97,6 @@ type SaleFormProps = {
   services?: Service[];
 };
 
-const PAYMENT_METHODS = [
-  { value: "CASH", label: "Efectivo" },
-  { value: "CARD", label: "Tarjeta" },
-  { value: "TRANSFER", label: "Transferencia" },
-];
-
 export function SaleForm({
   isOpen,
   onClose,
@@ -102,6 +110,7 @@ export function SaleForm({
   const [isPrinting, setIsPrinting] = useState(false);
   const [saleData] = useState<SaleData | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [newItem, setNewItem] = useState<NewItemForm>({
     id: "",
     type: "",
@@ -151,6 +160,41 @@ export function SaleForm({
     notes: "",
   });
 
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+  }>({});
+
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+    let isValid = true;
+
+    if (!customerData.name?.trim()) {
+      newErrors.name = 'El nombre es obligatorio';
+      isValid = false;
+    }
+
+    if (!customerData.email?.trim()) {
+      newErrors.email = 'El correo electrónico es obligatorio';
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(customerData.email)) {
+      newErrors.email = 'El correo electrónico no es válido';
+      isValid = false;
+    }
+
+    if (!customerData.phone?.trim()) {
+      newErrors.phone = 'El teléfono es obligatorio';
+      isValid = false;
+    } else if (!/^[0-9+\-\s]+$/.test(customerData.phone)) {
+      newErrors.phone = 'El teléfono solo puede contener números, guiones y espacios';
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -173,8 +217,6 @@ export function SaleForm({
   const handlePrint = useReactToPrint(
     printOptions as Parameters<typeof useReactToPrint>[0]
   );
-
-  
 
   // Efecto para manejar la impresión después de guardar la venta
   useEffect(() => {
@@ -433,13 +475,35 @@ export function SaleForm({
       return;
     }
 
+    // Verificar si hay servicios en la venta
+    const hasServices = selectedItems.some(item => item.type === 'service');
+
+    // Datos por defecto del cliente para ventas solo con productos
+    const defaultClientInfo = {
+      name: "venta",
+      email: "venta_cliente@example.com",
+      phone: "999999999",
+      address: "Calle Falsa 123",
+      dni: "11111111"
+    };
+
+    // Si hay servicios, validar los datos del cliente
+    if (hasServices) {
+      if (!validateForm()) {
+        // Desplazar la vista hacia el primer campo con error
+        const firstErrorField = Object.keys(errors)[0];
+        if (firstErrorField) {
+          const element = document.getElementById(`customer-${firstErrorField}`);
+          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element?.focus();
+        }
+        return;
+      }
+    }
+
     // Función para subir imágenes y obtener URLs
     const uploadImages = async (images: File[]): Promise<string[]> => {
       if (!images || images.length === 0) return [];
-
-      // En una implementación real, aquí iría la lógica para subir las imágenes
-      // a un servicio de almacenamiento como AWS S3, Cloudinary, etc.
-      // Por ahora, simulamos la subida con URLs de ejemplo
       console.log("Subiendo imágenes:", images);
       return images.map((_, index) => `url${index + 1}.jpg`);
     };
@@ -462,10 +526,7 @@ export function SaleForm({
             return {
               name: item.name,
               description: item.notes || "Sin descripción",
-              price:
-                typeof item.price === "string"
-                  ? parseFloat(item.price)
-                  : item.price,
+              price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
               type: "REPAIR" as const,
               photoUrls,
             };
@@ -474,23 +535,23 @@ export function SaleForm({
 
       // Validar que haya al menos un producto o servicio
       if (productsData.length === 0 && servicesData.length === 0) {
-        toast.error(
-          "La venta debe incluir al menos un producto o servicio válido"
-        );
+        toast.error("La venta debe incluir al menos un producto o servicio válido");
         return;
       }
 
+      // Usar los datos del cliente si existen, de lo contrario usar los valores por defecto
+      const clientInfo = hasServices 
+        ? {
+            name: customerData.name,
+            email: customerData.email,
+            phone: customerData.phone,
+            address: customerData.address || "",
+            dni: customerData.documentType === "dni" ? customerData.documentNumber : undefined,
+          }
+        : defaultClientInfo;
+
       const saleData = {
-        clientInfo: {
-          name: customerData.name || "Cliente ocasional",
-          email: customerData.email || "",
-          phone: customerData.phone || "",
-          address: customerData.address || "",
-          dni:
-            customerData.documentType === "dni"
-              ? customerData.documentNumber
-              : undefined,
-        },
+        clientInfo,
         products: productsData,
         services: servicesData,
       };
@@ -521,44 +582,253 @@ export function SaleForm({
     }
   };
 
-  
-
   // Renderizar formulario de cliente
   const renderCustomerForm = () => (
-    <div className="mb-6 p-4 bg-muted/10 rounded-lg border">
-      <h3 className="text-lg font-medium mb-4">Datos del Cliente</h3>
-      <CustomerForm
-        customerData={customerData}
-        onCustomerChange={(e) => {
-          const { name, value } = e.target;
-          setCustomerData((prev) => ({
-            ...prev,
-            [name]: value,
-          }));
-        }}
-      />
+    <div className="space-y-6 p-6 border rounded-lg bg-card shadow-sm">
+      <h3 className="text-xl font-semibold text-foreground">Datos del Cliente</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label htmlFor="name" className="text-foreground/90">
+            Nombre completo
+            {selectedItems.some(item => item.type === 'service') && (
+              <span className="text-destructive ml-1">*</span>
+            )}
+          </Label>
+          <Input
+            id="name"
+            value={customerData.name}
+            onChange={(e) => {
+              setCustomerData({ ...customerData, name: e.target.value });
+              if (errors.name) setErrors({ ...errors, name: undefined });
+            }}
+            placeholder="Nombre del cliente"
+            className={`mt-1 ${errors.name ? 'border-destructive' : ''}`}
+          />
+          {errors.name && (
+            <p className="text-sm text-destructive mt-1.5">{errors.name}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-foreground/90">
+            Correo electrónico
+            {selectedItems.some(item => item.type === 'service') && (
+              <span className="text-destructive ml-1">*</span>
+            )}
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            value={customerData.email}
+            onChange={(e) => {
+              setCustomerData({ ...customerData, email: e.target.value });
+              if (errors.email) setErrors({ ...errors, email: undefined });
+            }}
+            placeholder="correo@ejemplo.com"
+            className={`mt-1 ${errors.email ? 'border-destructive' : ''}`}
+          />
+          {errors.email && (
+            <p className="text-sm text-destructive mt-1.5">{errors.email}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="phone" className="text-foreground/90">
+            Teléfono
+            {selectedItems.some(item => item.type === 'service') && (
+              <span className="text-destructive ml-1">*</span>
+            )}
+          </Label>
+          <Input
+            id="phone"
+            type="tel"
+            value={customerData.phone}
+            onChange={(e) => {
+              setCustomerData({ ...customerData, phone: e.target.value });
+              if (errors.phone) setErrors({ ...errors, phone: undefined });
+            }}
+            placeholder="+51 999 999 999"
+            className={`mt-1 ${errors.phone ? 'border-destructive' : ''}`}
+          />
+          {errors.phone && (
+            <p className="text-sm text-destructive mt-1.5">{errors.phone}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="address" className="text-foreground/90">
+            Dirección
+          </Label>
+          <Input
+            id="address"
+            value={customerData.address}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, address: e.target.value })
+            }
+            placeholder="Dirección del cliente"
+            className="mt-1"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="documentType" className="text-foreground/90">
+            Tipo de documento
+          </Label>
+          <Select
+            value={customerData.documentType}
+            onValueChange={(value: "dni" | "ruc" | "ce" | "passport" | "other") =>
+              setCustomerData({ ...customerData, documentType: value })
+            }
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Seleccionar tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dni">DNI</SelectItem>
+              <SelectItem value="ruc">RUC</SelectItem>
+              <SelectItem value="other">Otro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="documentNumber" className="text-foreground/90">
+            Número de documento
+          </Label>
+          <Input
+            id="documentNumber"
+            value={customerData.documentNumber}
+            onChange={(e) =>
+              setCustomerData({
+                ...customerData,
+                documentNumber: e.target.value,
+              })
+            }
+            placeholder="Número de documento"
+            className="mt-1"
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="notes" className="text-foreground/90">
+            Notas adicionales
+          </Label>
+          <textarea
+            id="notes"
+            value={customerData.notes || ''}
+            onChange={(e) =>
+              setCustomerData({ ...customerData, notes: e.target.value })
+            }
+            placeholder="Notas adicionales del cliente"
+            className="flex h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
+          />
+        </div>
+      </div>
+
+      {selectedItems.some(item => item.type === 'service') && (
+        <div className="mt-4 p-3 bg-muted/30 rounded-md border border-muted">
+          <p className="text-sm text-muted-foreground flex items-center">
+            <Info className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span>Los campos marcados con <span className="text-destructive">*</span> son obligatorios cuando se incluyen servicios.</span>
+          </p>
+        </div>
+      )}
     </div>
   );
 
-  if (!isOpen) return null;
+  // Función para generar los datos del recibo
+  const generateReceiptData = () => {
+    const items = selectedItems.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      notes: item.notes || "",
+    }));
 
-  // Resto del código de renderizado...
-  // [Aquí iría el resto del código de renderizado del formulario]
+    const subtotal = selectedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    const tax = subtotal * 0.18; // 18% de IGV (ajustar según sea necesario)
+    const total = subtotal + tax;
+
+    return {
+      customerName: customerData.name || "Cliente ocasional",
+      customer: {
+        documentNumber: customerData.documentNumber,
+        documentType: customerData.documentType,
+        phone: customerData.phone,
+      },
+      items,
+      subtotal,
+      tax,
+      total,
+      paymentMethod,
+    };
+  };
+
+  // Datos de la empresa (puedes mover esto a un archivo de configuración)
+  const businessInfo = {
+    name: "Tecnicentro JR",
+    address: "Av. Ejemplo 123, Lima, Perú",
+    phone: "+51 987 654 321",
+    email: "contacto@tecnicentrojr.com",
+    ruc: "20123456789",
+    cuit: "20-12345678-9", // Agregado el CUIT que faltaba
+    footerText: "Gracias por su compra. Vuelva pronto.",
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/90 flex items-start md:items-center justify-center z-50 p-2 md:p-4 overflow-y-auto">
       <div className="bg-background border border-muted rounded-3xl shadow-xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-3 md:p-4 border-b rounded-t-3xl sticky top-0 bg-background z-10">
           <h2 className="text-lg md:text-xl font-semibold">Nueva Venta</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="h-8 w-8 p-0 flex items-center justify-center"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-8 w-8 p-0 flex items-center justify-center"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Cerrar</span>
+            </Button>
+          </div>
         </div>
+
+        {/* Diálogo de vista previa del PDF */}
+        <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
+          <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="px-6 pt-4 pb-2 border-b">
+              <DialogTitle className="text-2xl font-bold">Vista Previa del Comprobante</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden p-0">
+              <PDFViewer 
+                width="100%" 
+                height="100%"
+                style={{ 
+                  border: 'none',
+                  minHeight: 'calc(98vh - 120px)'
+                }}
+              >
+                <ReceiptPDF
+                  saleData={generateReceiptData()}
+                  businessInfo={businessInfo}
+                />
+              </PDFViewer>
+            </div>
+            <div className="p-3 border-t flex justify-end bg-gray-50">
+              <Button 
+                onClick={() => setShowPdfPreview(false)}
+                className="px-6 py-2 text-base"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="flex-1 overflow-y-auto">
           <div className="h-full flex flex-col md:flex-row">
@@ -843,37 +1113,33 @@ export function SaleForm({
                       </span>
                     </div>
                     <div className="flex justify-between font-medium text-lg">
-                      <span>Total:</span>
-                      <span>
-                        $
-                        {selectedItems
-                          .reduce(
-                            (sum, item) => sum + item.price * item.quantity,
-                            0
-                          )
-                          .toFixed(2)}
-                      </span>
-                    </div>
-                    {/* Payment Method Selector */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Método de Pago
-                      </label>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-full p-2 border rounded-md"
-                        required
-                      >
-                        {PAYMENT_METHODS.map((method) => (
-                          <option key={method.value} value={method.value}>
-                            {method.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex justify-between w-full gap-4">
+                        <span>Total:</span>
+
+                        <span className="font-medium">
+                          $
+                          {selectedItems
+                            .reduce(
+                              (sum, item) => sum + item.price * item.quantity,
+                              0
+                            )
+                            .toFixed(2)}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-6 space-y-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setShowPdfPreview(true)}
+                        disabled={selectedItems.length === 0}
+                        className="gap-1 w-full flex items-center justify-center"
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>Vista Previa</span>
+                      </Button>
                       <Button
                         className="w-full"
                         size="lg"

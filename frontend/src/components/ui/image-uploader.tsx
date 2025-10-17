@@ -1,7 +1,7 @@
 "use client";
 
 import { Progress } from "./progress";
-import { AlertCircle, CheckCircle, XCircle, Upload } from "lucide-react";
+import { AlertCircle, XCircle, Upload } from "lucide-react";
 import { Button } from "./button";
 
 interface ImageUploaderProps {

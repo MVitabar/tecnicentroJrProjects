@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -21,8 +21,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { clientService } from '@/services/client.service';
 import { Client } from '@/types/client.types';
 import { EditClientModal } from '@/components/modals/EditClientModal';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export default function ClientesPage() {
+function ClientesContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -362,5 +363,22 @@ export default function ClientesPage() {
         onClientUpdated={handleClientUpdated}
       />
     </div>
+  );
+}
+
+export default function ClientesPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-10 w-1/3" />
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    }>
+      <ClientesContent />
+    </Suspense>
   );
 }

@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { Suspense } from 'react';
 import { Providers } from '@/lib/providers';
 import './globals.css';
-import PWA from '@/components/pwa/PWA';
+import PWAWrapper from '@/components/pwa/PWAWrapper';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -39,7 +40,9 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <Providers>
-          <PWA />
+          <Suspense fallback={null}>
+            <PWAWrapper />
+          </Suspense>
           {children}
         </Providers>
       </body>

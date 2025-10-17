@@ -16,6 +16,7 @@ export interface Service {
   photoUrls: string[];
   status: string;
   type: string;
+  isActive: boolean;
   order: {
     id: string;
     clientId: string;

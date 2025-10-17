@@ -283,14 +283,85 @@ export const productService = {
   },
 
   async deleteProduct(id: string) {
-    try {
-      const response = await api.delete(`/products/remove/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error deleting product ${id}:`, error);
-      throw new Error('No se pudo eliminar el producto. Por favor, intente nuevamente.');
+  try {
+    console.log(`[Product Service] Attempting to delete product with ID: ${id}`);
+    
+    // Get the user's token from localStorage
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('No se encontró el token de autenticación. Por favor, inicie sesión nuevamente.');
     }
+
+    const response = await api.delete(`/products/remove/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      validateStatus: (status) => status < 600
+    });
+    
+    console.log('[Product Service] Delete response:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data
+    });
+    
+    if (response.status === 200 || response.status === 204) {
+      return response.data || { success: true };
+    }
+    
+    // Handle specific error statuses
+    switch (response.status) {
+      case 401:
+        throw new Error('No autorizado. Por favor, inicie sesión nuevamente.');
+      case 403:
+        throw new Error('No tiene permisos para eliminar este producto.');
+      case 404:
+        throw new Error('El producto no fue encontrado o ya ha sido eliminado.');
+      case 500:
+        console.error('Server error details:', response.data);
+        throw new Error('Error en el servidor al intentar eliminar el producto. Por favor, intente nuevamente más tarde.');
+      default:
+        throw new Error(`Error al eliminar el producto (${response.status}): ${response.statusText}`);
+    }
+    
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<{ 
+      message?: string; 
+      error?: string;
+      details?: string;
+    }>;
+    
+    console.error('[Product Service] Error deleting product:', {
+      id,
+      message: axiosError.message,
+      code: axiosError.code,
+      status: axiosError.response?.status,
+      statusText: axiosError.response?.statusText,
+      responseData: axiosError.response?.data,
+      config: {
+        url: axiosError.config?.url,
+        method: axiosError.config?.method,
+      }
+    });
+    
+    // Provide user-friendly error messages
+    if (axiosError.response?.data?.error) {
+      throw new Error(axiosError.response.data.error);
+    } 
+    if (axiosError.response?.data?.message) {
+      throw new Error(axiosError.response.data.message);
+    } 
+    if (axiosError.code === 'ECONNABORTED') {
+      throw new Error('La solicitud tardó demasiado. Por favor, verifique su conexión e intente nuevamente.');
+    }
+    if (axiosError.response?.status === 500) {
+      const errorDetails = axiosError.response.data?.details || 'Error interno del servidor';
+      throw new Error(`Error en el servidor: ${errorDetails}. Por favor, intente nuevamente más tarde.`);
+    }
+    
+    throw new Error('No se pudo eliminar el producto. Por favor, verifique su conexión e intente nuevamente.');
   }
+}
 };
 
 export type { Product, ProductsResponse } from '@/types/product.types';

@@ -3,7 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   // Configuración de TypeScript
   typescript: {
-    ignoreBuildErrors: true,
+    // Habilitar verificación de tipos estricta
+    ignoreBuildErrors: false,
+    // Verificar tipos durante el desarrollo
+    tsconfigPath: './tsconfig.json',
   },
   // Configuración de imágenes
   images: {

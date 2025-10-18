@@ -88,10 +88,16 @@ const serviceService: IServiceService = {
   
   async getServiceById(id: string) {
     try {
-      const response = await api.get<ServiceType>(`/services/${id}`);
+      const response = await api.get<ServiceType>(`/services/findOne/${id}`);
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>;
+      console.error('Error in getServiceById:', {
+        message: axiosError.message,
+        url: axiosError.config?.url,
+        status: axiosError.response?.status,
+        response: axiosError.response?.data
+      });
       throw new Error(axiosError.response?.data?.message || 'No se pudo cargar el servicio.');
     }
   },
@@ -127,35 +133,68 @@ const serviceService: IServiceService = {
   
   async updateServiceStatus(id: string, status: string) {
     try {
-      // First, update the service status
-      const response = await api.patch<ServiceType>(`/services/update/${id}`, { status });
+      console.log('Updating service status:', { id, status });
       
-      // If the service was marked as completed, check if we need to update the sale status
-      if (status === 'COMPLETED' && response.data.orderId) {
-        try {
-          // Get all services for this order
-          const services = await this.getServices();
-          const orderServices = services.filter(s => s.orderId === response.data.orderId);
-          
-          // Check if all services are completed
-          const allServicesCompleted = orderServices.every(service => 
-            service.id === id || service.status === 'COMPLETED'
-          );
-          
-          if (allServicesCompleted && orderServices.length > 0) {
-            // Update the sale status to COMPLETED
-            await api.patch(`/orders/${response.data.orderId}`, { status: 'COMPLETED' });
+      // First, get the current service to check the orderId
+      const currentService = await this.getServiceById(id);
+      console.log('Current service:', { orderId: currentService.orderId, currentStatus: currentService.status });
+      
+      const orderId = currentService.orderId;
+      
+      try {
+        // Update the service status using the correct endpoint
+        console.log('Sending PATCH to:', `/services/update/${id}`);
+        const response = await api.patch<ServiceType>(`/services/update/${id}`, { status });
+        console.log('Service update response:', response.data);
+        
+        // If the service was marked as completed, check if we need to update the order status
+        if (status === 'COMPLETED' && orderId) {
+          try {
+            console.log('Checking if we need to update order status for order:', orderId);
+            // Get all services for this order
+            const services = await this.getServices();
+            const orderServices = services.filter(s => s.orderId === orderId);
+            console.log(`Found ${orderServices.length} services for order ${orderId}`);
+            
+            // Check if all services are completed
+            const allServicesCompleted = orderServices.every(service => 
+              service.id === id || service.status === 'COMPLETED'
+            );
+            
+            console.log('All services completed:', allServicesCompleted);
+            
+            if (allServicesCompleted && orderServices.length > 0) {
+              console.log('Updating order status to COMPLETED');
+              // Update the order status to COMPLETED using the correct endpoint
+              const orderResponse = await api.patch(`/orders/status/${orderId}`, { status: 'COMPLETED' });
+              console.log('Order status update response:', orderResponse.data);
+              return { ...response.data, allServicesCompleted: true, orderId };
+            }
+          } catch (saleUpdateError) {
+            console.error('Error updating order status:', saleUpdateError);
+            // Don't fail the service update if we can't update the order status
+            return { ...response.data, orderUpdateError: 'No se pudo actualizar el estado de la orden' };
           }
-        } catch (saleUpdateError) {
-          console.error('Error updating sale status:', saleUpdateError);
-          // Don't fail the service update if we can't update the sale status
         }
+        
+        return response.data;
+      } catch (updateError) {
+        const axiosUpdateError = updateError as AxiosError<{ message?: string }>;
+        console.error('Error updating service status:', {
+          message: axiosUpdateError.message,
+          response: axiosUpdateError.response?.data,
+          status: axiosUpdateError.response?.status,
+          config: {
+            url: axiosUpdateError.config?.url,
+            method: axiosUpdateError.config?.method,
+            data: axiosUpdateError.config?.data,
+          },
+        });
+        throw new Error(axiosUpdateError.response?.data?.message || 'No se pudo actualizar el estado del servicio.');
       }
-      
-      return response.data;
     } catch (error) {
-      const axiosError = error as AxiosError<{ message?: string }>;
-      throw new Error(axiosError.response?.data?.message || 'No se pudo actualizar el estado del servicio.');
+      console.error('Error in updateServiceStatus:', error);
+      throw error; // Re-throw to be handled by the caller
     }
   },
 };

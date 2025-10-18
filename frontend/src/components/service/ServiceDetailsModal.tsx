@@ -55,10 +55,10 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
       setIsLoading(true);
       const formattedStatus = status.toUpperCase();
       
-      // Actualizar el estado del servicio y verificar si todos los servicios están completos
+      // Update the service status and check if all services are completed
       const result = await serviceService.updateServiceStatus(currentService.id, formattedStatus);
       
-      // Mostrar notificación apropiada
+      // Show appropriate notification
       if (result.allServicesCompleted && result.orderId) {
         toast.success('¡Servicio completado y orden marcada como finalizada!');
       } else if (formattedStatus === 'COMPLETED') {
@@ -67,13 +67,24 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
         toast.success('Estado del servicio actualizado correctamente');
       }
       
-      // Actualizar la interfaz
+      // Update the UI
       onStatusChange();
-      onClose();
+      
+      // Close the modal after a short delay to show the success message
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+      
     } catch (error: unknown) {
       console.error('Error updating service status:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el estado del servicio';
-      toast.error(errorMessage);
+      
+      // Show more specific error messages based on the error
+      if (errorMessage.includes('No se pudo actualizar el estado de la orden')) {
+        toast.error('El servicio se actualizó, pero no se pudo actualizar el estado de la orden. Por favor, inténtalo de nuevo más tarde.');
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

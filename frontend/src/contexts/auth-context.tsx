@@ -369,7 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'Admin',
+    isAdmin: user?.role?.toLowerCase() === 'admin',
     loading,
     error,
   };

@@ -48,7 +48,7 @@ interface Service {
   orderId: string;
 }
 
-interface OrderProduct {
+export interface OrderProduct {
   id: string;
   productId: string;
   orderId: string;

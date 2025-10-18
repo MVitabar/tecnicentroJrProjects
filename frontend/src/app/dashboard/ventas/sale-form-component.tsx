@@ -12,19 +12,11 @@ import {
   FileText,
   Info,
 } from "lucide-react";
-import { type CustomerData } from "./customer-form";
 import { uploadImages } from "@/lib/api/imageService";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useReactToPrint } from "react-to-print";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -188,10 +180,18 @@ export function SaleForm({
     });
   };
 
-  const [customerData, setCustomerData] = useState<CustomerData>({
+  interface FormCustomerData {
+    name: string;
+    phone: string;
+    documentNumber: string;
+    email: string;
+    address: string;
+    notes: string;
+  }
+
+  const [customerData, setCustomerData] = useState<FormCustomerData>({
     name: "",
     phone: "",
-    documentType: "dni",
     documentNumber: "",
     email: "",
     address: "",
@@ -202,32 +202,47 @@ export function SaleForm({
     name?: string;
     email?: string;
     phone?: string;
+    documentNumber?: string;
   }>({});
 
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
     let isValid = true;
 
-    if (!customerData.name?.trim()) {
-      newErrors.name = "El nombre es obligatorio";
-      isValid = false;
-    }
+    // Verificar si hay servicios en la venta
+    const hasServices = selectedItems.some((item) => item.type === "service");
 
-    if (!customerData.email?.trim()) {
-      newErrors.email = "El correo electrónico es obligatorio";
-      isValid = false;
-    } else if (!/\S+@\S+\.\S+/.test(customerData.email)) {
-      newErrors.email = "El correo electrónico no es válido";
-      isValid = false;
-    }
+    // Solo validar los campos del cliente si hay servicios
+    if (hasServices) {
+      if (!customerData.name?.trim()) {
+        newErrors.name = "El nombre es obligatorio";
+        isValid = false;
+      }
 
-    if (!customerData.phone?.trim()) {
-      newErrors.phone = "El teléfono es obligatorio";
-      isValid = false;
-    } else if (!/^[0-9+\-\s]+$/.test(customerData.phone)) {
-      newErrors.phone =
-        "El teléfono solo puede contener números, guiones y espacios";
-      isValid = false;
+      if (!customerData.email?.trim()) {
+        newErrors.email = "El correo electrónico es obligatorio";
+        isValid = false;
+      } else if (!/\S+@\S+\.\S+/.test(customerData.email)) {
+        newErrors.email = "El correo electrónico no es válido";
+        isValid = false;
+      }
+
+      if (!customerData.phone?.trim()) {
+        newErrors.phone = "El teléfono es obligatorio";
+        isValid = false;
+      } else if (!/^[0-9+\-\s]+$/.test(customerData.phone)) {
+        newErrors.phone =
+          "El teléfono solo puede contener números, guiones y espacios";
+        isValid = false;
+      }
+
+      if (!customerData.documentNumber?.trim()) {
+        newErrors.documentNumber = "El DNI es obligatorio";
+        isValid = false;
+      } else if (!/^[0-9]{8}$/.test(customerData.documentNumber)) {
+        newErrors.documentNumber = "El DNI debe tener 8 dígitos";
+        isValid = false;
+      }
     }
 
     setErrors(newErrors);
@@ -506,6 +521,15 @@ export function SaleForm({
     });
   };
 
+  // Datos por defecto del cliente para ventas solo con productos
+  const defaultClientInfo = {
+    name: "venta",
+    email: "venta_cliente@example.com",
+    phone: "999999999",
+    address: "Calle Falsa 123",
+    dni: "11111111",
+  };
+
   // Manejar envío del formulario
   const handleSubmit = async () => {
     if (selectedItems.length === 0) {
@@ -516,23 +540,12 @@ export function SaleForm({
     // Verificar si hay servicios en la venta
     const hasServices = selectedItems.some((item) => item.type === "service");
 
-    // Datos por defecto del cliente para ventas solo con productos
-    const defaultClientInfo = {
-      name: "venta",
-      email: "venta_cliente@example.com",
-      phone: "999999999",
-      address: "Calle Falsa 123",
-      dni: "11111111",
-    };
-
     // Si hay servicios, validar los datos del cliente
     if (hasServices) {
       if (!validateForm()) {
         const firstErrorField = Object.keys(errors)[0];
         if (firstErrorField) {
-          const element = document.getElementById(
-            `customer-${firstErrorField}`
-          );
+          const element = document.getElementById(firstErrorField);
           element?.scrollIntoView({ behavior: "smooth", block: "center" });
           element?.focus();
         }
@@ -611,17 +624,14 @@ export function SaleForm({
         return;
       }
 
-      // Usar los datos del cliente si existen, de lo contrario usar los valores por defecto
+      // Usar los datos del cliente si hay servicios, de lo contrario usar los valores por defecto
       const clientInfo = hasServices
         ? {
             name: customerData.name,
             email: customerData.email,
             phone: customerData.phone,
             address: customerData.address || "",
-            dni:
-              customerData.documentType === "dni"
-                ? customerData.documentNumber
-                : undefined,
+            dni: customerData.documentNumber,
           }
         : defaultClientInfo;
 
@@ -640,9 +650,8 @@ export function SaleForm({
         setCustomerData({
           name: "",
           phone: "",
-          email: "",
-          documentType: "dni",
           documentNumber: "",
+          email: "",
           address: "",
           notes: "",
         });
@@ -759,29 +768,11 @@ export function SaleForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="documentType" className="text-foreground/90">
-            Tipo de documento
-          </Label>
-          <Select
-            value={customerData.documentType}
-            onValueChange={(
-              value: "dni" | "ruc" | "ce" | "passport" | "other"
-            ) => setCustomerData({ ...customerData, documentType: value })}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Seleccionar tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="dni">DNI</SelectItem>
-              <SelectItem value="ruc">RUC</SelectItem>
-              <SelectItem value="other">Otro</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="documentNumber" className="text-foreground/90">
-            Número de documento
+            Número de DNI
+            {selectedItems.some((item) => item.type === "service") && (
+              <span className="text-destructive ml-1">*</span>
+            )}
           </Label>
           <Input
             id="documentNumber"
@@ -792,9 +783,14 @@ export function SaleForm({
                 documentNumber: e.target.value,
               })
             }
-            placeholder="Número de documento"
-            className="mt-1"
+            placeholder="Número de DNI"
+            className={`mt-1 ${errors.documentNumber ? "border-destructive" : ""}`}
           />
+          {errors.documentNumber && (
+            <p className="text-sm text-destructive mt-1.5">
+              {errors.documentNumber}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2 md:col-span-2">
@@ -827,13 +823,12 @@ export function SaleForm({
       )}
     </div>
   );
-
-  // Función para generar los datos del recibo
   const generateReceiptData = () => {
     const items = selectedItems.map((item) => ({
       name: item.name,
-      quantity: item.quantity,
       price: item.price,
+      quantity: item.quantity,
+      total: item.price * item.quantity,
       notes: item.notes || "",
     }));
 
@@ -841,19 +836,32 @@ export function SaleForm({
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const tax = subtotal * 0.18; // 18% de IGV (ajustar según sea necesario)
-    const total = subtotal + tax;
+    const total = subtotal; // Total es igual al subtotal sin IVA
+
+    // Verificar si hay servicios en la venta
+    const hasServices = selectedItems.some((item) => item.type === "service");
+
+    // Usar datos del cliente real si hay servicios, de lo contrario usar los datos por defecto
+    const customerInfo = hasServices
+      ? {
+          name: customerData.name || "Sin especificar",
+          phone: customerData.phone || "Sin especificar",
+          documentNumber: customerData.documentNumber || "Sin especificar",
+        }
+      : {
+          name: defaultClientInfo.name,
+          phone: defaultClientInfo.phone,
+          documentNumber: defaultClientInfo.dni,
+        };
 
     return {
-      customerName: customerData.name || "Cliente ocasional",
+      customerName: customerInfo.name,
       customer: {
-        documentNumber: customerData.documentNumber,
-        documentType: customerData.documentType,
-        phone: customerData.phone,
+        documentNumber: customerInfo.documentNumber,
+        phone: customerInfo.phone,
       },
       items,
       subtotal,
-      tax,
       total,
       paymentMethod,
     };

@@ -1,12 +1,12 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Order } from "@/services/order.service";
-import { useState } from "react";
+import { Order, OrderProduct } from "@/services/order.service";
+import { productService } from "@/services/product.service";
 import Image from "next/image";
 import { Button } from "../ui/button";
+import { useEffect, useState } from "react";
 
 interface OrderDetailsDialogProps {
   open: boolean;
@@ -31,8 +31,74 @@ const statusText = {
   PAID: 'Pagado'
 } as const;
 
-export function OrderDetailsDialog({ open, onOpenChange, order: initialOrder }: OrderDetailsDialogProps) {
-  const [order] = useState(initialOrder);
+interface ProductMap {
+  [key: string]: { name: string; price: number; description?: string };
+}
+
+export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDialogProps) {
+  const [productMap, setProductMap] = useState<ProductMap>({});
+  
+  useEffect(() => {
+    if (!order?.orderProducts?.length) return;
+
+    // Collect unique product IDs from the order
+    const productIds = Array.from(new Set(
+      order.orderProducts
+        .filter(item => item.productId && !productMap[item.productId])
+        .map(item => item.productId)
+    ));
+
+    if (productIds.length === 0) return;
+
+    // Fetch product details for all unique IDs
+    const fetchProducts = async () => {
+      try {
+        const products = await Promise.all(
+          productIds.map(id => 
+            productService.getProductById(id as string)
+              .then(product => ({
+                id: id as string,
+                name: product.name,
+                price: product.price,
+                description: typeof product.description === 'string' ? product.description : ''
+              }))
+              .catch(() => null)
+          )
+        );
+
+        // Create a map of product ID to product details
+        const newProductMap = products.reduce((acc, product) => {
+          if (product) {
+            acc[product.id] = {
+              name: product.name,
+              price: product.price,
+              description: product.description
+            };
+          }
+          return acc;
+        }, {} as ProductMap);
+
+        setProductMap(prev => ({
+          ...prev,
+          ...newProductMap
+        }));
+      } catch (error) {
+        console.error('Error fetching product details:', error);
+      }
+    };
+
+    fetchProducts();
+  }, [order?.orderProducts, productMap]);
+
+  const getProductInfo = (item: OrderProduct) => {
+    if (item.product) {
+      return item.product;
+    }
+    if (item.productId && productMap[item.productId]) {
+      return productMap[item.productId];
+    }
+    return null;
+  };
 
   if (!order) return null;
 
@@ -40,21 +106,30 @@ export function OrderDetailsDialog({ open, onOpenChange, order: initialOrder }: 
     return format(new Date(dateString), "PPP p", { locale: es });
   };
 
+  const isValidUrl = (url: string): boolean => {
+    try {
+      new URL(url);
+      return true;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) {
+      return false;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl w-[calc(100%-2rem)] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span className="text-lg sm:text-xl">Detalles de la Venta</span>
+      <DialogContent className="sm:max-w-2xl w-[90%] max-h-[90vh] p-0 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-2 border-b border-border flex-shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <DialogTitle className="text-lg sm:text-xl font-semibold">Detalles de la Venta</DialogTitle>
             <Badge className={statusColors[order.status]}>{statusText[order.status]}</Badge>
-          </DialogTitle>
-        </DialogHeader>
+          </div>
+        </div>
         
-        <div className="h-px bg-gray-200 dark:bg-gray-700 mx-6" />
-        
-        <ScrollArea className="flex-1 px-6 py-2">
-          <div className="space-y-6 pb-4">
-            {/* Información General */}
+        {/* Contenido con scroll */}
+        <div className="flex-1 overflow-y-auto p-6">
+              {/* Información General */}
             <div className="space-y-2">
               <h3 className="font-medium">Información General</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -98,18 +173,20 @@ export function OrderDetailsDialog({ open, onOpenChange, order: initialOrder }: 
                         <tr key={item.id} className="border-t">
                           <td className="p-2">
                             <p className="font-medium">
-                              {item.product?.name || `Producto ${item.productId.substring(0, 6)}`}
+                              {getProductInfo(item)?.name || `Producto ${item.productId?.substring(0, 6) || 'N/A'}`}
                             </p>
-                            {item.product?.description && (
+                            {getProductInfo(item)?.description && (
                               <p className="text-xs text-muted-foreground">
-                                {item.product.description}
+                                {getProductInfo(item)?.description}
                               </p>
                             )}
                           </td>
                           <td className="p-2 text-right">{item.quantity}</td>
-                          <td className="p-2 text-right">${(item.unitPrice || 0).toFixed(2)}</td>
+                          <td className="p-2 text-right">
+                            ${(item.unitPrice || getProductInfo(item)?.price || 0).toFixed(2)}
+                          </td>
                           <td className="p-2 text-right font-medium">
-                            ${((item.unitPrice || 0) * item.quantity).toFixed(2)}
+                            ${((item.unitPrice || getProductInfo(item)?.price || 0) * item.quantity).toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -164,25 +241,31 @@ export function OrderDetailsDialog({ open, onOpenChange, order: initialOrder }: 
                       
                       {service.photoUrls && service.photoUrls.length > 0 && (
                         <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
-                          {service.photoUrls.map((url, index) => (
-                            <a 
-                              key={index} 
-                              href={url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex-shrink-0"
-                            >
-                              <div className="relative h-16 w-16 rounded-md overflow-hidden border">
-                                <Image
-                                  src={url}
-                                  alt={`Imagen ${index + 1}`}
-                                  fill
-                                  className="object-cover"
-                                  sizes="(max-width: 64px) 100vw, 64px"
-                                />
-                              </div>
-                            </a>
-                          ))}
+                          {service.photoUrls
+                            .filter(url => url && isValidUrl(url))
+                            .map((url, index) => (
+                              <a 
+                                key={index} 
+                                href={url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex-shrink-0"
+                              >
+                                <div className="relative h-16 w-16 rounded-md overflow-hidden border">
+                                  <Image
+                                    src={url}
+                                    alt={`Imagen ${index + 1}`}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 64px) 100vw, 64px"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              </a>
+                            ))}
                         </div>
                       )}
                     </div>
@@ -253,18 +336,18 @@ export function OrderDetailsDialog({ open, onOpenChange, order: initialOrder }: 
                 </div>
               </>
             )}
-          </div>
-        </ScrollArea>
+        </div>
         
-        <div className="flex justify-end pt-4">
+        {/* Footer */}
+        <div className="border-t border-border p-4 flex justify-end flex-shrink-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
+            className="mr-2"
           >
             Cerrar
           </Button>
         </div>
-        
       </DialogContent>
     </Dialog>
   );

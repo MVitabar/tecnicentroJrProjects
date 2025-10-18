@@ -4,7 +4,7 @@
   "description": "Sistema de gestión para Tecnicentro JR",
   "start_url": "/login",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#000000",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",

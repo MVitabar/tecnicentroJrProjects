@@ -3,6 +3,9 @@ import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+// Registrar la imagen del logo
+const logo = '/icons/logo-jr-g.png';
+
 // Registrar fuentes si es necesario
 Font.register({
   family: 'Helvetica',
@@ -32,6 +35,21 @@ const styles = StyleSheet.create({
     padding: 8,
     position: 'relative',
     fontSize: 8,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  logo: {
+    width: '80px',
+    height: 'auto',
+    marginRight: 10,
+  },
+  headerInfo: {
+    flex: 1,
+    marginLeft: 10,
   },
   receiptCopy: {
     fontSize: 10,
@@ -159,16 +177,23 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
   const currentDate = new Date();
   const formattedDate = format(currentDate, "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es });
 
-  const renderReceipt = (copy: 'ORIGINAL' | 'DUPLICADO') => (
+  const renderReceipt = (copy: 'CLIENTE' | 'COMERCIO') => (
     <View style={styles.receipt}>
       <Text style={styles.receiptCopy}>{copy}</Text>
       
-      <View style={styles.header}>
-        <Text style={styles.title}>{businessInfo.name}</Text>
-        <Text style={styles.subtitle}>{businessInfo.address}</Text>
-        <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
-        <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
-        <Text style={styles.subtitle}>{formattedDate}</Text>
+      <View style={styles.logoContainer}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <Image 
+          src={logo} 
+          style={styles.logo}
+        />
+        <View style={styles.header}>
+          <Text style={styles.title}>{businessInfo.name}</Text>
+          <Text style={styles.subtitle}>{businessInfo.address}</Text>
+          <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
+          <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
+          <Text style={styles.subtitle}>{formattedDate}</Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -213,7 +238,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
         </View>
       </View>
 
-      {copy === 'ORIGINAL' && (
+      {copy === 'CLIENTE' && (
         <View style={{
           marginTop: 12,
           padding: 8,
@@ -279,7 +304,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
       
       <View style={styles.footer}>
         <Text>{businessInfo.footerText}</Text>
-        <Text>Gracias por su compra - {copy === 'ORIGINAL' ? 'CLIENTE' : 'COMERCIO'}</Text>
+        <Text>Gracias por su compra - {copy === 'CLIENTE' ? 'CLIENTE' : 'COMERCIO'}</Text>
       </View>
     </View>
   );
@@ -289,7 +314,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
       <Page size="A4" style={styles.page}>
         {/* Primera copia (ORIGINAL) */}
         <View style={{ marginBottom: 15 }}>
-          {renderReceipt('ORIGINAL')}
+          {renderReceipt('CLIENTE')}
         </View>
         
         {/* Línea divisoria */}
@@ -314,7 +339,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
         
         {/* Segunda copia (DUPLICADO) */}
         <View>
-          {renderReceipt('DUPLICADO')}
+          {renderReceipt('COMERCIO')}
         </View>
       </Page>
     </Document>

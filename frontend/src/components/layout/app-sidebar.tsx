@@ -16,49 +16,59 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from '@/contexts/auth-context';
 
-const sidebarItems = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Productos",
-    href: "/dashboard/productos",
-    icon: Package,
-  },
-  {
-    name: "Ventas",
-    href: "/dashboard/ventas",
-    icon: ShoppingCart,
-  },
-  
-  {
-    name: "Servicios",
-    href: "/dashboard/servicios",
-    icon: FileText,
-  },
-  {
-    name: "Clientes",
-    href: "/dashboard/clientes",
-    icon: Users,
-  },
-  {
-    name: "Configuración",
-    href: "/dashboard/configuracion",
-    icon: Settings,
-  },
-];
+const getSidebarItems = (userRole: string) => {
+  const baseItems = [
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      roles: ["ADMIN"],
+    },
+    {
+      name: "Ventas",
+      href: "/dashboard/ventas",
+      icon: ShoppingCart,
+      roles: ["ADMIN", "USER"],
+    },
+    {
+      name: "Servicios",
+      href: "/dashboard/servicios",
+      icon: FileText,
+      roles: ["ADMIN", "USER"],
+    },
+    {
+      name: "Productos",
+      href: "/dashboard/productos",
+      icon: Package,
+      roles: ["ADMIN", "USER"],
+    },
+    {
+      name: "Clientes",
+      href: "/dashboard/clientes",
+      icon: Users,
+      roles: ["ADMIN"],
+    },
+    {
+      name: "Configuración",
+      href: "/dashboard/configuracion",
+      icon: Settings,
+      roles: ["ADMIN"],
+    },
+  ];
+
+  return baseItems.filter(item => item.roles.includes(userRole));
+};
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const userRole = user?.role || 'USER'; // Valor por defecto 'USER' si no hay usuario
   return (
     <aside className="hidden md:block fixed left-0 top-0 h-screen w-64 bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-sm">
       <div className="flex h-full flex-col pt-16">
         <div className="flex-1 overflow-y-auto py-4 relative px-2">
           <nav className="space-y-1">
-            {sidebarItems.map((item) => {
+            {getSidebarItems(userRole).map((item) => {
               const isActive = pathname === item.href;
               return (
                 <div key={item.href} className="relative">

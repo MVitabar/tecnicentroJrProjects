@@ -17,7 +17,10 @@ interface IServiceService {
   createService(serviceData: CreateServiceDto): Promise<ServiceType>;
   updateService(id: string, serviceData: UpdateServiceDto): Promise<ServiceType>;
   deleteService(id: string): Promise<void>;
-  updateServiceStatus(id: string, status: string): Promise<ServiceType>;
+  updateServiceStatus(
+    id: string, 
+    status: string
+  ): Promise<ServiceType & { allServicesCompleted?: boolean; orderId?: string }>;
 }
 
 const serviceService: IServiceService = {
@@ -124,7 +127,31 @@ const serviceService: IServiceService = {
   
   async updateServiceStatus(id: string, status: string) {
     try {
+      // First, update the service status
       const response = await api.patch<ServiceType>(`/services/update/${id}`, { status });
+      
+      // If the service was marked as completed, check if we need to update the sale status
+      if (status === 'COMPLETED' && response.data.orderId) {
+        try {
+          // Get all services for this order
+          const services = await this.getServices();
+          const orderServices = services.filter(s => s.orderId === response.data.orderId);
+          
+          // Check if all services are completed
+          const allServicesCompleted = orderServices.every(service => 
+            service.id === id || service.status === 'COMPLETED'
+          );
+          
+          if (allServicesCompleted && orderServices.length > 0) {
+            // Update the sale status to COMPLETED
+            await api.patch(`/orders/${response.data.orderId}`, { status: 'COMPLETED' });
+          }
+        } catch (saleUpdateError) {
+          console.error('Error updating sale status:', saleUpdateError);
+          // Don't fail the service update if we can't update the sale status
+        }
+      }
+      
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>;

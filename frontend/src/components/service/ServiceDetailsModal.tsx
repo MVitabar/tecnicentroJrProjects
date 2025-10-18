@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Service } from '@/types/service.types';
 import { useState, useEffect } from 'react';
@@ -53,11 +54,26 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
     try {
       setIsLoading(true);
       const formattedStatus = status.toUpperCase();
-      await serviceService.updateServiceStatus(currentService.id, formattedStatus);
+      
+      // Actualizar el estado del servicio y verificar si todos los servicios están completos
+      const result = await serviceService.updateServiceStatus(currentService.id, formattedStatus);
+      
+      // Mostrar notificación apropiada
+      if (result.allServicesCompleted && result.orderId) {
+        toast.success('¡Servicio completado y orden marcada como finalizada!');
+      } else if (formattedStatus === 'COMPLETED') {
+        toast.success('Servicio marcado como completado');
+      } else {
+        toast.success('Estado del servicio actualizado correctamente');
+      }
+      
+      // Actualizar la interfaz
       onStatusChange();
       onClose();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error updating service status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el estado del servicio';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

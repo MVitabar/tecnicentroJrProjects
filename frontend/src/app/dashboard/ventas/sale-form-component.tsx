@@ -965,15 +965,15 @@ export function SaleForm({
                       required
                     />
                     {isDropdownOpen && newItem.type === "product" && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-card text-card-foreground border rounded-md shadow-lg max-h-60 overflow-auto dark:bg-gray-800 dark:border-gray-700">
                         {filteredItems().map((item) => (
                           <div
                             key={item.id}
-                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                            className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors duration-200 dark:hover:bg-gray-700"
                             onClick={() => handleItemSelect(item)}
                           >
                             <div className="font-medium">{item.name}</div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-muted-foreground">
                               ${item.price.toFixed(2)}
                             </div>
                           </div>

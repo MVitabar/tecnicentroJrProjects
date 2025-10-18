@@ -37,6 +37,7 @@ api.interceptors.request.use(
 
     const token = authService.getToken();
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -51,8 +52,8 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    
-    // If error is not 401 or we've already tried to refresh, reject
+
+    // If error is not a 401 or we've already retried, reject
     if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
       return Promise.reject(error);
     }
@@ -60,49 +61,53 @@ api.interceptors.response.use(
     // If we're already refreshing the token, add the request to the queue
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      })
-        .then((token) => {
-          if (originalRequest.headers) {
+        failedQueue.push({
+          resolve: (token: string) => {
+            originalRequest.headers = originalRequest.headers || {};
             originalRequest.headers.Authorization = `Bearer ${token}`;
-          }
-          return api(originalRequest);
-        })
-        .catch((err) => {
-          return Promise.reject(err);
+            resolve(api(originalRequest));
+          },
+          reject: (err: Error) => {
+            reject(err);
+          },
         });
+      });
     }
 
-    // Set flag and try to refresh token
     originalRequest._retry = true;
     isRefreshing = true;
 
     try {
-      const newTokens = await authService.refreshToken();
+      const newToken = await authService.refreshToken();
       
-      if (!newTokens) {
+      if (newToken) {
+        // Update the authorization header
+        if (api.defaults.headers) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${newToken.accessToken}`;
+        }
+        
+        // Process queued requests
+        processQueue(null, newToken.accessToken);
+        
+        // Retry the original request
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${newToken.accessToken}`;
+        return api(originalRequest);
+      } else {
         // If refresh fails, clear auth and redirect to login
-        authService.logout();
-        window.location.href = '/login';
-        return Promise.reject(new Error('Session expired. Please log in again.'));
+        await authService.logout();
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(new Error('Sesión expirada'));
       }
-
-      // Update the original request with the new token
-      if (originalRequest.headers) {
-        originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
-      }
-
-      // Process queued requests
-      processQueue(null, newTokens.accessToken);
-
-      // Retry the original request
-      return api(originalRequest);
-    } catch (error) {
+    } catch (refreshError) {
       // If refresh fails, clear auth and redirect to login
-      const refreshError = error instanceof Error ? error : new Error('Error al actualizar la sesión');
-      processQueue(refreshError, null);
-      authService.logout();
-      window.location.href = '/login';
+      processQueue(new Error('Error al renovar la sesión'), null);
+      await authService.logout();
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;
@@ -110,4 +115,5 @@ api.interceptors.response.use(
   }
 );
 
+// Export the API instance as default
 export default api;

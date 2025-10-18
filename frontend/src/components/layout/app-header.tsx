@@ -6,18 +6,54 @@ import { cn } from '@/lib/utils';
 import { Home, Package, ShoppingCart, Users, LogOut, Settings, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
-const mobileNavItems = [
-  { name: 'Inicio', href: '/dashboard', icon: Home },
-  { name: 'Productos', href: '/dashboard/productos', icon: Package },
-  { name: 'Ventas', href: '/dashboard/ventas', icon: ShoppingCart },
-  { name: 'Servicios', href: '/dashboard/servicios', icon: FileText },
-  { name: 'Clientes', href: '/dashboard/clientes', icon: Users },
-  { name: 'Configuración', href: '/dashboard/configuracion', icon: Settings },
-];
+const getMobileNavItems = (userRole: string) => {
+  const baseItems = [
+    { 
+      name: 'Inicio', 
+      href: '/dashboard', 
+      icon: Home,
+      roles: ['ADMIN']
+    },
+    { 
+      name: 'Ventas', 
+      href: '/dashboard/ventas', 
+      icon: ShoppingCart,
+      roles: ['ADMIN', 'USER']
+    },
+    { 
+      name: 'Servicios', 
+      href: '/dashboard/servicios', 
+      icon: FileText,
+      roles: ['ADMIN', 'USER']
+    },
+    { 
+      name: 'Productos', 
+      href: '/dashboard/productos', 
+      icon: Package,
+      roles: ['ADMIN', 'USER']
+    },
+    { 
+      name: 'Clientes', 
+      href: '/dashboard/clientes', 
+      icon: Users,
+      roles: ['ADMIN']
+    },
+    { 
+      name: 'Configuración', 
+      href: '/dashboard/configuracion', 
+      icon: Settings,
+      roles: ['ADMIN']
+    },
+  ];
+
+  return baseItems.filter(item => item.roles.includes(userRole));
+};
 
 export function AppHeader() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const userRole = user?.role || 'USER'; // Valor por defecto 'USER' si no hay usuario
+  const mobileNavItems = getMobileNavItems(userRole);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden">

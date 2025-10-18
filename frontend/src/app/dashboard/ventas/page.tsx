@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, X, Info, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { OrderDetailsDialog } from "@/components/orders/OrderDetailsDialog";
 
@@ -192,8 +192,44 @@ export default function VentasPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="container mx-auto px-2 sm:px-4 py-6 space-y-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-8 w-48 bg-muted rounded-md animate-pulse"></div>
+              <div className="h-4 w-64 bg-muted rounded-md animate-pulse"></div>
+            </div>
+            <div className="h-9 w-32 bg-muted rounded-md animate-pulse"></div>
+          </div>
+          <div className="h-10 w-full max-w-2xl bg-muted rounded-md animate-pulse"></div>
+        </div>
+        
+        <div className="rounded-md border overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  {[...Array(8)].map((_, i) => (
+                    <TableHead key={i} className="h-10">
+                      <div className="h-4 bg-muted rounded-md w-3/4 mx-auto"></div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...Array(5)].map((_, rowIndex) => (
+                  <TableRow key={rowIndex}>
+                    {[...Array(8)].map((_, cellIndex) => (
+                      <TableCell key={cellIndex} className="h-16">
+                        <div className="h-4 bg-muted rounded-md w-3/4 mx-auto"></div>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
     );
   }
@@ -204,54 +240,72 @@ export default function VentasPage() {
         <CardHeader className="p-4 sm:p-6 pb-0 sm:pb-0">
           <div className="flex flex-col space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="space-y-2">
-                <CardTitle className="text-xl sm:text-2xl">Ventas</CardTitle>
+              <div className="space-y-1">
+                <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight">Ventas</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Administra y revisa el historial de ventas
                 </p>
               </div>
               
-              <div className="w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <Button 
                   onClick={() => setIsFormOpen(true)}
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto bg-primary hover:bg-primary/90 transition-colors"
                   size="sm"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  <span>Nueva Venta</span>
+                  <span className="font-medium">Nueva Venta</span>
                 </Button>
               </div>
             </div>
             
-            <form onSubmit={handleSearch} className="pt-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Buscar por ID, cliente o método de pago..."
-                  className="pl-9 w-full"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="space-y-3">
+              <form onSubmit={handleSearch} className="w-full">
+                <div className="relative max-w-2xl">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar por ID, cliente o método de pago..."
+                    className="pl-9 w-full"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm('');
+                        loadData('');
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </form>
+              
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5" />
+                <span>Mostrando {orders.length} {orders.length === 1 ? 'venta' : 'ventas'}</span>
               </div>
-            </form>
+            </div>
           </div>
         </CardHeader>
-        
         <CardContent className="p-0 sm:p-6 pt-0">
           <div className="rounded-md border overflow-hidden">
             <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableHead className="w-[1/8] px-2 text-center">ID</TableHead>
-                    <TableHead className="w-[1/8] px-2 text-center">Fecha</TableHead>
-                    <TableHead className="min-w-[150px] px-2 text-center">Cliente</TableHead>
-                    <TableHead className="w-[1/8] px-2 text-center">Productos</TableHead>
-                    <TableHead className="w-[1/8] px-2 text-center">Servicios</TableHead>
-                    <TableHead className="w-[1/8] px-2 text-center">Estado</TableHead>
-                    <TableHead className="w-[100px] px-2 text-center">Total</TableHead>
-                    <TableHead className="w-[60px] px-2 text-center">Acciones</TableHead>
+                    <TableHead className="w-[80px] px-2 text-center hidden sm:table-cell">ID</TableHead>
+                    <TableHead className="w-[90px] px-2 text-center">Fecha</TableHead>
+                    <TableHead className="min-w-[120px] px-2 text-center">Cliente</TableHead>
+                    <TableHead className="w-[100px] px-2 text-center hidden md:table-cell">Productos</TableHead>
+                    <TableHead className="w-[100px] px-2 text-center hidden md:table-cell">Servicios</TableHead>
+                    <TableHead className="w-[110px] px-2 text-center">Estado</TableHead>
+                    <TableHead className="w-[100px] px-2 text-right">Total</TableHead>
+                    <TableHead className="w-[50px] px-2 text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -262,88 +316,107 @@ export default function VentasPage() {
                         ? format(new Date(order.createdAt), 'dd/MM/yy')
                         : 'N/A';
                       
-                      const statusColors = {
-                        COMPLETED: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-                        PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-                        CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                      const statusConfig = {
+                        COMPLETED: {
+                          text: 'Completado',
+                          class: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                          icon: '✓'
+                        },
+                        PENDING: {
+                          text: 'Pendiente',
+                          class: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+                          icon: '⏳'
+                        },
+                        CANCELLED: {
+                          text: 'Cancelado',
+                          class: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                          icon: '✕'
+                        }
                       };
                       
-                      const statusText = {
-                        COMPLETED: 'Completado',
-                        PENDING: 'Pendiente',
-                        CANCELLED: 'Cancelado'
-                      };
+                      const status = statusConfig[order.status] || statusConfig.PENDING;
                         
                       const clientName = order.client?.name || 'Sin cliente';
                       const productCount = order.orderProducts?.length || 0;
                       const serviceCount = order.services?.length || 0;
                       
                       return (
-                        <TableRow key={order.id} className="hover:bg-muted/50">
-                          <TableCell className="px-2 py-3 text-center">
-                            <div className="text-sm font-medium" title={order.id}>
-                              {order.id.substring(0, 4)}...
+                        <TableRow key={order.id} className="hover:bg-muted/50 group">
+                          <TableCell className="px-2 py-3 text-center hidden sm:table-cell">
+                            <div className="text-xs font-mono font-medium text-muted-foreground" title={order.id}>
+                              {order.id.substring(0, 6)}...
                             </div>
                           </TableCell>
                           <TableCell className="px-2 py-3 text-center">
-                            <div className="flex flex-col">
-                              <span className="text-sm">{shortDate}</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs sm:text-sm font-medium">{shortDate}</span>
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(order.createdAt), 'HH:mm')}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className="px-2 py-3 text-center ">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium truncate">{clientName}</span>
+                          <TableCell className="px-2 py-3">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-medium truncate max-w-[120px] sm:max-w-[180px] mx-auto">
+                                {clientName}
+                              </span>
                               {order.client?.phone && (
-                                <span className="text-xs text-muted-foreground truncate">
+                                <a 
+                                  href={`tel:${order.client.phone}`}
+                                  className="text-xs text-muted-foreground hover:text-primary transition-colors truncate max-w-[120px] sm:max-w-[180px] mx-auto"
+                                  title={`Llamar a ${clientName}`}
+                                >
                                   {order.client.phone}
-                                </span>
+                                </a>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="px-2 py-3 text-center">
+                          <TableCell className="px-2 py-3 text-center hidden md:table-cell">
                             {productCount > 0 ? (
-                              <Badge variant="outline" className="text-xs">
-                                {productCount} {productCount === 1 ? 'producto' : 'productos'}
+                              <Badge variant="outline" className="text-xs py-0.5">
+                                {productCount} {productCount === 1 ? 'prod.' : 'prod.'}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="px-2 py-3 text-center">
+                          <TableCell className="px-2 py-3 text-center hidden md:table-cell">
                             {serviceCount > 0 ? (
-                              <Badge variant="outline" className="text-xs">
-                                {serviceCount} {serviceCount === 1 ? 'servicio' : 'servicios'}
+                              <Badge variant="outline" className="text-xs py-0.5">
+                                {serviceCount} {serviceCount === 1 ? 'serv.' : 'serv.'}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="px-2 py-3 text-center">
-                            <span 
-                              className={`inline-flex items-center justify-center w-full px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}
-                              title={statusText[order.status]}
-                            >
-                              {statusText[order.status]}
+                          <TableCell className="px-2 py-3">
+                            <div className="flex items-center justify-center">
+                              <span 
+                                className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.class} whitespace-nowrap`}
+                                title={status.text}
+                              >
+                                <span className="mr-1">{status.icon}</span>
+                                <span className="hidden sm:inline">{status.text}</span>
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-3 text-right">
+                            <span className="text-sm font-medium whitespace-nowrap">
+                              ${order.totalAmount.toLocaleString('es-AR')}
                             </span>
                           </TableCell>
-                          <TableCell className="px-2 py-3 text-center">
-                            <span className="text-sm font-medium">
-                              ${order.totalAmount.toFixed(2)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="px-2 py-3 text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 mx-auto"
-                              onClick={() => handleViewOrder(order.id)}
-                              title="Ver detalles"
-                            >
-                              <Search className="h-4 w-4" />
-                            </Button>
+                          <TableCell className="px-2 py-3">
+                            <div className="flex justify-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleViewOrder(order.id)}
+                                title="Ver detalles"
+                              >
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -360,9 +433,21 @@ export default function VentasPage() {
             </div>
           </div>
           
-          {orders.length > 0 && (
-            <div className="mt-4 text-sm text-muted-foreground text-center sm:text-right">
-              Mostrando {orders.length} {orders.length === 1 ? 'venta' : 'ventas'}
+          {orders.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground">No hay ventas registradas</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                Comienza creando tu primera venta haciendo clic en el botón &quot;Nueva Venta&quot;
+              </p>
+              <Button 
+                onClick={() => setIsFormOpen(true)}
+                className="mt-4"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Crear primera venta
+              </Button>
             </div>
           )}
         </CardContent>

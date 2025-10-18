@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, RefreshCw, Users as UsersIcon } from "lucide-react";
+import { Edit, Trash2, Users as UsersIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { UserDialog } from "./user-dialog";
 
@@ -26,32 +26,61 @@ type User = {
   updatedAt: string;
 };
 
-export function UserTable() {
+interface UserTableProps {
+  searchTerm?: string;
+  roleFilter?: string;
+  onSearchChange?: (search: string) => void;
+  onRoleFilterChange?: (role: string) => void;
+}
+
+export function UserTable({ 
+  searchTerm = '', 
+  roleFilter = 'all',
+  onSearchChange,
+  onRoleFilterChange 
+}: UserTableProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const handleEditClick = (user: User) => {
     setEditingUser(user);
     setIsDialogOpen(true);
   };
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     setIsDialogOpen(false);
     setEditingUser(null);
-    fetchUsers(); // Refresh the user list
+    await fetchUsers(); // Refresh the user list
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem(
         process.env.NEXT_PUBLIC_TOKEN_KEY || "auth_token"
       );
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
+      let url = `${process.env.NEXT_PUBLIC_API_URL}/users`;
+      const params = new URLSearchParams();
+      
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+      
+      if (roleFilter && roleFilter !== 'all') {
+        params.append('role', roleFilter);
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -68,6 +97,7 @@ export function UserTable() {
       const data = await response.json();
       setUsers(data.items || data); // Handle both paginated and non-paginated responses
       setError(null);
+      setCurrentPage(1); // Reset to first page on new search/filter
     } catch (err) {
       console.error("Error al cargar usuarios:", err);
       const errorMessage = err instanceof Error ? err.message : "Ocurrió un error inesperado";
@@ -76,11 +106,11 @@ export function UserTable() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchTerm, roleFilter]);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   const getRoleBadge = (role: string) => {
     const roleMap = {
@@ -104,16 +134,6 @@ export function UserTable() {
     return <Badge className={variant}>{label}</Badge>;
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const handleDelete = async (userId: string) => {
     if (!confirm("¿Estás seguro de que deseas eliminar este usuario?")) {
@@ -150,13 +170,23 @@ export function UserTable() {
     }
   };
 
-  // Loading state
+  // Loading state with skeleton loader
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="flex flex-col items-center space-y-2">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
+      <div className="space-y-4 p-4">
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+              <div className="h-10 w-10 rounded-full bg-muted animate-pulse"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
+                <div className="h-3 bg-muted rounded w-1/2 animate-pulse"></div>
+              </div>
+              <div className="h-8 w-20 bg-muted rounded-md animate-pulse"></div>
+              <div className="h-8 w-8 bg-muted rounded-md animate-pulse"></div>
+              <div className="h-8 w-8 bg-muted rounded-md animate-pulse"></div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -202,51 +232,112 @@ export function UserTable() {
     );
   }
 
-  // Empty state
+  // Empty state with search results
   if (users.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
         <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium">No hay usuarios</h3>
+        <h3 className="text-lg font-medium">
+          {searchTerm || roleFilter !== 'all' 
+            ? 'No se encontraron usuarios que coincidan con la búsqueda' 
+            : 'No hay usuarios registrados'}
+        </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          Comienza agregando un nuevo usuario
+          {searchTerm || roleFilter !== 'all'
+            ? 'Intenta con otros términos de búsqueda o ajusta los filtros.'
+            : 'Comienza agregando un nuevo usuario al sistema.'}
         </p>
-        <UserDialog onSuccess={fetchUsers}>
-          <Button>Agregar Usuario</Button>
-        </UserDialog>
+        <div className="flex space-x-3">
+          {(searchTerm || roleFilter !== 'all') && (
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                if (onSearchChange) onSearchChange('');
+                if (onRoleFilterChange) onRoleFilterChange('all');
+              }}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
 
+  // Pagination
+  const totalPages = Math.ceil(users.length / itemsPerPage);
+  const currentUsers = users.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   return (
     <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nombre</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Rol</TableHead>
-            <TableHead>Teléfono</TableHead>
-            <TableHead>Fecha de creación</TableHead>
-            <TableHead>Última actualización</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
+      <div className="relative w-full overflow-auto">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="w-[200px]">Nombre</TableHead>
+              <TableHead className="hidden md:table-cell">Email</TableHead>
+              <TableHead className="w-[120px]">Rol</TableHead>
+              <TableHead className="hidden sm:table-cell">Teléfono</TableHead>
+              <TableHead className="hidden lg:table-cell">Creado</TableHead>
+              <TableHead className="hidden xl:table-cell">Actualizado</TableHead>
+              <TableHead className="w-[100px] text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.name}</TableCell>
-              <TableCell>{user.email}</TableCell>
+          {currentUsers.map((user) => (
+            <TableRow key={user.id} className="group hover:bg-muted/50">
+              <TableCell className="font-medium">
+                <div className="flex items-center space-x-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-sm text-muted-foreground md:hidden">{user.email}</div>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="hidden md:table-cell">
+                <div className="max-w-[200px] truncate" title={user.email}>
+                  {user.email}
+                </div>
+              </TableCell>
               <TableCell>{getRoleBadge(user.role)}</TableCell>
-              <TableCell>{user.phone}</TableCell>
-              <TableCell>{formatDate(user.createdAt)}</TableCell>
-              <TableCell>{formatDate(user.updatedAt)}</TableCell>
+              <TableCell className="hidden sm:table-cell">
+                {user.phone ? (
+                  <a 
+                    href={`tel:${user.phone}`} 
+                    className="text-primary hover:underline"
+                    title={`Llamar a ${user.name}`}
+                  >
+                    {user.phone}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+              <TableCell className="hidden lg:table-cell">
+                <div className="text-sm text-muted-foreground">
+                  {new Date(user.createdAt).toLocaleDateString('es-ES')}
+                </div>
+              </TableCell>
+              <TableCell className="hidden xl:table-cell">
+                <div className="text-sm text-muted-foreground">
+                  {new Date(user.updatedAt).toLocaleDateString('es-ES')}
+                </div>
+              </TableCell>
               <TableCell>
-                <div className="flex justify-end space-x-2">
+                <div className="flex justify-end space-x-1">
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     onClick={() => handleEditClick(user)}
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                    title="Editar usuario"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -254,8 +345,10 @@ export function UserTable() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDelete(user.id)}
+                    className="h-8 w-8 text-destructive hover:text-destructive/90 opacity-0 group-hover:opacity-100"
+                    title="Eliminar usuario"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </TableCell>
@@ -263,20 +356,99 @@ export function UserTable() {
           ))}
         </TableBody>
       </Table>
-
-      {isDialogOpen && (
-        <UserDialog 
-          open={isDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditingUser(null);
-            }
-            setIsDialogOpen(open);
-          }}
-          user={editingUser || undefined}
-          onSuccess={handleSuccess}
-        />
+      </div>
+      
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center rounded-md border border-muted-foreground/20 bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="relative ml-3 inline-flex items-center rounded-md border border-muted-foreground/20 bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Siguiente
+            </button>
+          </div>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Mostrando <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> a{' '}
+                <span className="font-medium">
+                  {Math.min(currentPage * itemsPerPage, users.length)}
+                </span>{' '}
+                de <span className="font-medium">{users.length}</span> usuarios
+              </p>
+            </div>
+            <div className="flex space-x-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-8 w-8 p-0"
+              >
+                <span className="sr-only">Página anterior</span>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Show pages around current page
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={pageNum === currentPage ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 p-0"
+              >
+                <span className="sr-only">Siguiente página</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
+
+      <UserDialog 
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingUser(null);
+          }
+          setIsDialogOpen(open);
+        }}
+        user={editingUser || undefined}
+        onSuccess={handleSuccess}
+      />
     </div>
   );
 }

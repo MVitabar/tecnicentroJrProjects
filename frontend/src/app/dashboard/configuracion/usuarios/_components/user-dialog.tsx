@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -65,9 +64,9 @@ export function UserDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {!user && (
+      {!user && children && (
         <DialogTrigger asChild>
-          {children || <Button>Nuevo Usuario</Button>}
+          {children}
         </DialogTrigger>
       )}
       <DialogContent className="sm:max-w-[600px]">

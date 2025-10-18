@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 
 type TabValue = 'general' | 'usuarios' | 'seguridad' | 'sistema';
 
@@ -42,7 +43,14 @@ export default function ConfiguracionPage() {
             <p className="text-muted-foreground">
               Configura los ajustes generales de la aplicación.
             </p>
-            {/* Add general settings form here */}
+            <div className="mt-4">
+              <Link 
+                href="/dashboard/configuracion/general" 
+                className="text-primary hover:underline inline-flex items-center"
+              >
+                Ver configuración general <ChevronRight className="ml-1 h-4 w-4" />
+              </Link>
+            </div>
           </div>
         </TabsContent>
 

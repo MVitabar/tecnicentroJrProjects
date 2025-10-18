@@ -50,7 +50,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         }
 
         const userRole = user.role || 'USER';
-        const userRoutes = ["/dashboard/ventas", "/dashboard/servicios", "/dashboard/productos"];
+        const userRoutes = ["/dashboard/ventas", "/dashboard/servicios", "/dashboard/productos", "/dashboard/clientes"];
         
         // Redirect USER role from dashboard root to ventas
         if (userRole === 'USER' && pathname === '/dashboard') {

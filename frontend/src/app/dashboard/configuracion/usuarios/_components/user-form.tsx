@@ -133,16 +133,34 @@ export function UserForm({ onSuccess, initialData }: UserFormProps) {
         }
 
         const token = localStorage.getItem(process.env.NEXT_PUBLIC_TOKEN_KEY || 'auth_token');
-        const userData = {
-          name: data.name,
-          username: data.username,
-          email: data.email,
-          phone: data.phone,  // Añadido el campo phone
-          password: data.password
-          // El rol no se incluye en la creación ya que el backend lo asigna automáticamente
-        };
+        
+        // Definimos los endpoints según el tipo de usuario
+        const isAdmin = data.role === 'ADMIN';
+        const endpoint = isAdmin ? '/auth/register' : '/users/create';
+        
+        // Preparamos los datos del usuario
+        const userData = isAdmin 
+          ? {
+              name: data.name,
+              username: data.username,  // Agregado username requerido
+              email: data.email,
+              password: data.password,
+              phone: data.phone
+              // No incluimos el role ya que el endpoint no lo acepta
+              // El backend debe manejar la asignación de rol para este endpoint
+            }
+          : {
+              name: data.name,
+              username: data.username,
+              email: data.email,
+              phone: data.phone,
+              password: data.password
+              // No incluimos el rol para usuarios regulares
+            };
 
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/create`, {
+        console.log(`Creando usuario ${isAdmin ? 'ADMIN' : 'regular'} con datos:`, userData);
+        
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -152,8 +170,19 @@ export function UserForm({ onSuccess, initialData }: UserFormProps) {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Error al crear el usuario');
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          let errorMessage = 'Error al crear el usuario';
+          
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorMessage;
+          } catch {
+            // Si no se puede parsear como JSON, usamos el texto del error
+            errorMessage = errorText || errorMessage;
+          }
+          
+          throw new Error(errorMessage);
         }
       }
       

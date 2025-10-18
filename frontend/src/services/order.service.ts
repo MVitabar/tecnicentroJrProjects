@@ -151,19 +151,15 @@ export const orderService = {
         status: orderData.status || 'PENDING'
       };
 
-      // Create the request body with createOrderDto as a JSON string
-      const requestBody = {
-        createOrderDto: JSON.stringify(orderDataToSend)
-      };
-
       console.group('Sending Order Data to Backend');
       console.log('Endpoint:', 'orders/create');
       console.log('Method:', 'POST');
-      console.log('Request Data:', JSON.stringify(requestBody, null, 2));
+      console.log('Request Data:', JSON.stringify(orderDataToSend, null, 2));
       console.groupEnd();
 
-      const response = await api.post<Order>("orders/create", 
-        requestBody,
+      const response = await api.post<Order>(
+        "orders/create", 
+        orderDataToSend,
         {
           headers: {
             "Content-Type": "application/json",

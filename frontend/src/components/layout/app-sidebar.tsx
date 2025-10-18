@@ -46,7 +46,7 @@ const getSidebarItems = (userRole: string) => {
       name: "Clientes",
       href: "/dashboard/clientes",
       icon: Users,
-      roles: ["ADMIN"],
+      roles: ["ADMIN", "USER"],
     },
     {
       name: "Configuración",

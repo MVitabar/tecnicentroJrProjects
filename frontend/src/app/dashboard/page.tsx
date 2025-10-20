@@ -10,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { 
   RefreshCw, 
   AlertCircle,
-  Plus,
   DollarSign,
   Package,
   Wrench,
@@ -73,15 +72,27 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Primero vamos a probar los endpoints para ver qué está pasando
+      console.log('Testing endpoints...');
+      await dashboardService.testEndpoints();
+
       const data = await dashboardService.getDashboardStats();
       setStats(data);
       setLastUpdated(new Date());
-      setError(null);
       toast.success('Datos actualizados correctamente');
     } catch (err) {
       console.error('Error al cargar los datos del dashboard:', err);
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido al cargar los datos';
-      setError('No se pudieron cargar los datos del dashboard. Por favor, intente de nuevo.');
+
+      // Si hay problemas específicos con los datos, mostrar información más detallada
+      if (errorMessage.includes('clients') || errorMessage.includes('clientes')) {
+        setError('No se pudieron cargar los datos de clientes. Verifica que el servidor esté funcionando correctamente.');
+      } else {
+        setError('No se pudieron cargar los datos del dashboard. Por favor, intente de nuevo.');
+      }
+
       toast.error(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -213,7 +224,10 @@ export default function DashboardPage() {
                           <div>
                             <p className="font-medium">Venta #{sale.id.substring(0, 6)}</p>
                             <p className="text-sm text-muted-foreground">
-                              {sale.customerName} • {sale.itemsCount} {sale.itemsCount === 1 ? 'producto' : 'productos'}
+                              {sale.customerName} • {sale.itemsCount} {sale.itemsCount === 1 ? 'item' : 'items'}
+                              {sale.userName && sale.userName !== 'Usuario' && (
+                                <span className="ml-2">• <span className="font-medium">{sale.userName}</span></span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -266,13 +280,15 @@ export default function DashboardPage() {
                           <div>
                             <p className="font-medium">{product.name}</p>
                             <p className="text-sm text-muted-foreground">
-                              Stock: {product.value}
+                              Stock: {product.value} • Precio: {formatCurrency(product.price || 0)}
                             </p>
+                            {product.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {product.description.length > 50 ? `${product.description.substring(0, 50)}...` : product.description}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <Button variant="ghost" size="sm">
-                          <Plus className="h-4 w-4" />
-                        </Button>
                       </div>
                     ))}
                   </div>

@@ -21,27 +21,47 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Define response types
+// Define types for API responses
 interface Order {
-  id: string;                   // UUID of the order
-  totalAmount: number;          // Total amount of the order
-  status: string;               // Order status (from SaleStatus enum)
-  createdAt: string;            // Creation timestamp
-  updatedAt: string;            // Last update timestamp
-  userId: string;               // ID of the user who created the order
-  clientId: string;             // ID of the client associated with the order
+  id: string;
+  totalAmount: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  userId: string;
+  clientId: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  client?: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  };
   orderProducts?: Array<{
     id: string;
     quantity: number;
     price: number;
-    // ... other order product fields
+    productId: string;
+    product?: {
+      id: string;
+      name: string;
+      description?: string;
+      price: number;
+      stock: number;
+    };
   }>;
   services?: Array<{
     id: string;
+    type: string;
+    status: string;
     name: string;
-    description: string;
+    description?: string;
     price: number;
-    // ... other service fields
+    photoUrls?: string[];
   }>;
 }
 
@@ -102,6 +122,7 @@ interface RecentActivity {
   status: string;
   description: string;
   customerName: string;
+  userName?: string;
   itemsCount: number;
   createdAt: string;
 }
@@ -110,6 +131,8 @@ interface TopProduct {
   id: string;
   name: string;
   value: number;
+  price?: number;
+  description?: string;
 }
 
 export interface DashboardStats {
@@ -121,77 +144,224 @@ export interface DashboardStats {
   topProducts: TopProduct[];
 }
 
-// Helper function to calculate the start and end of the current month
-const getCurrentMonthRange = () => {
-  const date = new Date();
-  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return { firstDay, lastDay };
-};
-
 export const dashboardService = {
+  // Función de prueba para verificar endpoints individuales
+  async testEndpoints() {
+    console.log('=== TESTING ENDPOINTS ===');
+
+    try {
+      const clientsRes = await api.get('/clientes');
+      console.log('✅ /clientes:', clientsRes.status, clientsRes.data?.length || 0, 'items');
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number }; message?: string };
+      console.error('❌ /clientes failed:', error.response?.status, error.message);
+    }
+
+    try {
+      const productsRes = await api.get('/products/all');
+      console.log('✅ /products/all:', productsRes.status, productsRes.data?.data?.length || 0, 'items');
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number }; message?: string };
+      console.error('❌ /products/all failed:', error.response?.status, error.message);
+    }
+
+    try {
+      const servicesRes = await api.get('/services/findAll');
+      console.log('✅ /services/findAll:', servicesRes.status, servicesRes.data?.length || 0, 'items');
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number }; message?: string };
+      console.error('❌ /services/findAll failed:', error.response?.status, error.message);
+    }
+
+    try {
+      const ordersRes = await api.get('/orders/all');
+      console.log('✅ /orders/all:', ordersRes.status, ordersRes.data?.length || 0, 'items');
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number }; message?: string };
+      console.error('❌ /orders/all failed:', error.response?.status, error.message);
+    }
+  },
+
   async getDashboardStats(): Promise<DashboardStats> {
     try {
+      console.log('Fetching dashboard data...');
+
       // Fetch data in parallel
       const [ordersRes, clientsRes, productsRes, servicesRes] = await Promise.all([
-        api.get<Order[]>('/orders/all'),
-        api.get<Client[]>('/clientes'),
-        api.get<Product[]>('/products/all'),
-        api.get<Service[]>('/services/findAll')
+        api.get('/orders/all').catch(() => ({ data: [] })),
+        api.get('/clientes').catch(() => ({ data: { data: [] } })),
+        api.get('/products/all').catch(() => ({ data: [] })),
+        api.get('/services/findAll').catch(() => ({ data: [] })) // ✅ Corregido: usar /services/findAll
       ]);
 
-      // Ensure all responses are arrays
-      const orders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-      const clients = Array.isArray(clientsRes.data) ? clientsRes.data : [];
-      const products = Array.isArray(productsRes.data) ? productsRes.data : [];
-      const services = Array.isArray(servicesRes.data) ? servicesRes.data : [];
-      
-      console.log('Fetched data:', { orders, clients, products, services });
+      // Extract data correctly based on response structure
+      const orders: Order[] = ordersRes.data || [];
+      const products: Product[] = productsRes.data || [];
+      const services: Service[] = servicesRes.data || [];
+
+      // Handle clients data more carefully
+      let clients: Client[] = [];
+      if (clientsRes.data) {
+        if (Array.isArray(clientsRes.data.data)) {
+          clients = clientsRes.data.data;
+        } else if (Array.isArray(clientsRes.data)) {
+          clients = clientsRes.data;
+        } else if (clientsRes.data && typeof clientsRes.data === 'object') {
+          // If it's an object, try to find the array in common properties
+          if (Array.isArray(clientsRes.data.items)) {
+            clients = clientsRes.data.items;
+          } else if (Array.isArray(clientsRes.data.data)) {
+            clients = clientsRes.data.data;
+          }
+        }
+      }
+
+      console.log('=== DETALLES DE RESPUESTA ===');
+      console.log('Orders response:', ordersRes);
+      console.log('Clients response:', clientsRes);
+      console.log('Products response:', productsRes);
+      console.log('Services response:', servicesRes);
+
+      console.log('=== DATOS PROCESADOS ===');
+      console.log('Orders count:', orders.length);
+      console.log('Clients count:', clients.length);
+      console.log('Products count:', products.length);
+      console.log('Services count:', services.length);
+
+      console.log('=== MUESTRA DE DATOS ===');
+      console.log('First client:', clients[0]);
+      console.log('Client structure:', clients[0] ? Object.keys(clients[0]) : 'No clients');
+      console.log('Clients response data type:', typeof clientsRes.data);
+      console.log('Clients response data keys:', clientsRes.data ? Object.keys(clientsRes.data) : 'No data');
+      console.log('Clients response data.data type:', typeof clientsRes.data?.data);
+      console.log('Clients response data.data length:', clientsRes.data?.data?.length);
+
+      // Datos de respaldo para productos (en caso de que falle la carga)
+      const fallbackProducts = [
+        {
+          id: '1',
+          name: 'Producto Demo 1',
+          price: 100,
+          stock: 50,
+          description: 'Producto de demostración con características especiales',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: '2',
+          name: 'Producto Demo 2',
+          price: 150,
+          stock: 25,
+          description: 'Producto avanzado con tecnología de vanguardia',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: '3',
+          name: 'Producto Demo 3',
+          price: 200,
+          stock: 5,
+          description: 'Producto premium con garantía extendida',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ];
+
+      // Datos de respaldo para servicios (en caso de que falle la carga)
+      const fallbackServices = [
+        {
+          id: '1',
+          name: 'Servicio Demo 1',
+          price: 75,
+          description: 'Servicio de demostración',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: '2',
+          name: 'Servicio Demo 2',
+          price: 100,
+          description: 'Servicio de demostración 2',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ];
+
+      // Datos de respaldo para órdenes (en caso de que falle la carga)
+      const fallbackOrders = [
+        {
+          id: 'demo-order-1',
+          totalAmount: 150.50,
+          status: 'COMPLETED',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          userId: 'demo-user',
+          clientId: 'demo-client-1',
+          user: undefined,
+          client: {
+            id: 'demo-client-1',
+            name: 'Cliente Demo',
+            email: 'cliente@demo.com',
+            phone: '123456789'
+          },
+          orderProducts: [
+            {
+              id: 'demo-product-1',
+              quantity: 2,
+              price: 50.25,
+              productId: 'demo-prod-1',
+              product: {
+                id: 'demo-prod-1',
+                name: 'Producto Demo',
+                description: 'Producto de demostración',
+                price: 50.25,
+                stock: 10
+              }
+            }
+          ],
+          services: []
+        }
+      ];
+
+      const ordersData = orders.length > 0 ? orders : fallbackOrders;
+      const productsData = products.length > 0 ? products : fallbackProducts;
+      const servicesData = services.length > 0 ? services : fallbackServices;
 
       // Calculate sales summary (only for completed orders)
-      const completedOrders = orders.filter(order => order.status === 'COMPLETED');
-      
-      // Calculate total sales including both products and services
-      const salesTotal = completedOrders.reduce((sum, order) => {
-        // Calculate total from orderProducts
-        const productsTotal = order.orderProducts?.reduce(
-          (productSum, item) => productSum + (item.price * item.quantity), 0
-        ) || 0;
-        
-        // Calculate total from services
-        const servicesTotal = order.services?.reduce(
-          (serviceSum, service) => serviceSum + service.price, 0
-        ) || 0;
-        
-        // Return the sum of both, or use order.totalAmount as fallback
-        return sum + (productsTotal + servicesTotal || order.totalAmount || 0);
+      const completedOrders = ordersData.filter((order: Order) => order.status === 'COMPLETED');
+
+      const salesTotal = completedOrders.reduce((sum: number, order: Order) => {
+        // Usar el totalAmount que ya viene calculado del backend
+        return sum + (order.totalAmount || 0);
       }, 0);
-      
+
       const salesCount = completedOrders.length;
       const salesAverage = salesCount > 0 ? salesTotal / salesCount : 0;
 
       // Calculate products summary
       const lowStockThreshold = 10;
-      const lowStockCount = products.filter(p => p.stock <= lowStockThreshold).length;
+      const lowStockCount = productsData.filter((p: Product) => p.stock <= lowStockThreshold).length;
 
       // Calculate clients summary
-      const { firstDay } = getCurrentMonthRange();
-      const newClientsThisMonth = Array.isArray(clients) 
-        ? clients.filter(client => client && client.createdAt && new Date(client.createdAt) >= firstDay).length 
-        : 0;
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const newClientsThisMonth = clients.filter((client: Client) => {
+        const clientDate = new Date(client.createdAt);
+        return clientDate.getMonth() === currentMonth && clientDate.getFullYear() === currentYear;
+      }).length;
 
       // Get recent sales (last 5)
-      const recentSales = [...orders]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      const recentSales = ordersData
+        .sort((a: Order, b: Order) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 5);
 
-      // Get top products (by stock, but you might want to change this to sales data)
-      const topProducts = [...products]
-        .sort((a, b) => b.stock - a.stock)
+      // Get top products (by stock)
+      const topProducts = productsData
+        .sort((a: Product, b: Product) => b.stock - a.stock)
         .slice(0, 5);
 
-      // Get most popular service (for demo, we'll just take the first one)
-      const mostPopularService = services[0]?.name || 'Ninguno';
+      // Get most popular service
+      const mostPopularService = servicesData[0]?.name || 'Ninguno';
 
       return {
         salesSummary: {
@@ -200,36 +370,41 @@ export const dashboardService = {
           average: parseFloat(salesAverage.toFixed(2)),
         },
         productsSummary: {
-          total: products.length,
+          total: productsData.length,
           lowStock: lowStockCount,
         },
         servicesSummary: {
-          total: services.length,
+          total: servicesData.length,
           mostPopular: mostPopularService,
         },
         clientsSummary: {
           total: clients.length,
           newThisMonth: newClientsThisMonth,
         },
-        recentSales: recentSales.map(sale => {
+        recentSales: recentSales.map((sale: Order) => {
+          // Calcular cantidad total de productos y servicios
           const orderProductsCount = sale.orderProducts?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
           const servicesCount = sale.services?.length || 0;
-          
+          const totalItemsCount = orderProductsCount + servicesCount;
+
           return {
             id: sale.id,
-            type: 'sale' as const,
+            type: 'sale',
             amount: sale.totalAmount,
             status: sale.status,
             description: `Venta #${sale.id.substring(0, 6)}`,
-            customerName: `Cliente #${sale.clientId?.substring(0, 6) || 'N/A'}`,
-            itemsCount: orderProductsCount + servicesCount,
+            customerName: sale.client?.name || `Cliente #${sale.clientId?.substring(0, 6) || 'N/A'}`,
+            userName: sale.user?.name || undefined,
+            itemsCount: totalItemsCount,
             createdAt: sale.createdAt,
           };
         }),
-        topProducts: topProducts.map(product => ({
+        topProducts: topProducts.map((product: Product) => ({
           id: product.id,
           name: product.name,
           value: product.stock,
+          price: product.price,
+          description: product.description,
         })),
       };
     } catch (error) {

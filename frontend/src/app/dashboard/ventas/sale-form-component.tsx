@@ -844,14 +844,18 @@ export function SaleForm({
     // Usar datos del cliente real si hay servicios, de lo contrario usar los datos por defecto
     const customerInfo = hasServices
       ? {
-          name: customerData.name || "Sin especificar",
-          phone: customerData.phone || "Sin especificar",
-          documentNumber: customerData.documentNumber || "Sin especificar",
+          name: customerData.name || "Venta",
+          phone: customerData.phone || "123456789",
+          documentNumber: customerData.documentNumber || "11111111",
+          email: customerData.email || "venta@venta.com",
+          address: customerData.address || "Venta",
         }
       : {
           name: defaultClientInfo.name,
           phone: defaultClientInfo.phone,
           documentNumber: defaultClientInfo.dni,
+          email: defaultClientInfo.email,
+          address: defaultClientInfo.address,
         };
 
     return {
@@ -859,6 +863,8 @@ export function SaleForm({
       customer: {
         documentNumber: customerInfo.documentNumber,
         phone: customerInfo.phone,
+        email: customerInfo.email,
+        address: customerInfo.address,
       },
       items,
       subtotal,

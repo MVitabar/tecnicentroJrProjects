@@ -83,8 +83,37 @@ export const isNewSaleData = (data: SaleData): data is Required<Pick<SaleData, '
   return 'products' in data && 'services' in data;
 };
 
-export const isLegacySaleData = (data: SaleData): data is Required<Pick<SaleData, 'items' | 'paymentMethod' | 'total'>> & {
-  status?: string;
-} => {
-  return 'items' in data && 'paymentMethod' in data && 'total' in data;
-};
+// Tipos para respuestas de órdenes/ventas
+export interface Order {
+  id: string;
+  totalAmount: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  userId: string;
+  clientId: string;
+  orderProducts?: Array<{
+    id: string;
+    quantity: number;
+    price: number;
+    productId: string;
+  }>;
+  services?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+  }>;
+}
+
+export interface OrdersResponse {
+  data: Order[];
+  total: number;
+  meta?: {
+    totalItems: number;
+    itemCount: number;
+    itemsPerPage: number;
+    totalPages: number;
+    currentPage: number;
+  };
+}

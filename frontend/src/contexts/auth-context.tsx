@@ -231,9 +231,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   role: currentUser.role || 'User',
                   verified: currentUser.verified || false
                 });
-                // Schedule token refresh
+                // Schedule token refresh only if token won't expire soon
                 const timeUntilExpire = (decoded.exp - currentTime - 60) * 1000;
-                if (timeUntilExpire > 0) {
+                if (timeUntilExpire > 60000) { // Only schedule if more than 1 minute left
                   setTimeout(() => {
                     authService.refreshToken().catch(console.error);
                   }, Math.min(timeUntilExpire, 2147483647));
@@ -241,8 +241,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } else {
               // Token expired, try to refresh
-              const refreshed = await authService.refreshToken();
-              return !!refreshed; // Return true if refresh was successful
+              console.log('Token expired, attempting refresh...');
+              try {
+                const refreshed = await authService.refreshToken();
+                if (refreshed) {
+                  // Refresh successful, get current user again
+                  const currentUser = await authService.getCurrentUser();
+                  if (currentUser) {
+                    setUser({
+                      id: currentUser.id,
+                      email: currentUser.email,
+                      name: currentUser.name || '',
+                      role: currentUser.role || 'User',
+                      verified: currentUser.verified || false
+                    });
+                  }
+                } else {
+                  // Refresh failed, logout
+                  logout(false);
+                }
+              } catch (refreshError) {
+                console.error('Refresh failed:', refreshError);
+                logout(false);
+              }
             }
           } catch (error) {
             console.error('Error during token verification:', error);

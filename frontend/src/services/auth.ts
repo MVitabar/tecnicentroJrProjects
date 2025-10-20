@@ -78,10 +78,10 @@ api.interceptors.response.use(
       // Only handle token expiration for authenticated routes
       const originalRequest = error.config;
       if (originalRequest.url !== '/auth/login' && 
-          originalRequest.url !== '/auth/refresh' &&
+          !originalRequest.url?.includes('/auth/refresh') &&
           !originalRequest._retry) {
         // If this is a refresh token request that failed, logout
-        if (originalRequest.url === '/auth/refresh') {
+        if (originalRequest.url?.includes('/auth/refresh')) {
           if (typeof window !== 'undefined') {
             localStorage.removeItem(TOKEN_KEY);
             localStorage.removeItem(REFRESH_TOKEN_KEY);
@@ -89,27 +89,45 @@ api.interceptors.response.use(
             window.location.href = '/login';
           }
         } else {
-          // Try to refresh the token
-          return authService.refreshToken()
-            .then(() => {
-              // Retry the original request with new token
-              const token = getToken();
-              if (token) {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return api(originalRequest);
-              }
-              throw new Error('No token available');
-            })
-            .catch(() => {
-              // If refresh fails, redirect to login
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem(TOKEN_KEY);
-                localStorage.removeItem(REFRESH_TOKEN_KEY);
-                localStorage.removeItem(USER_KEY);
-                window.location.href = '/login';
-              }
-              return Promise.reject(error);
+          // Try to refresh the token only if we're not already refreshing
+          if (!window.isRefreshing) {
+            return authService.refreshToken()
+              .then(() => {
+                // Retry the original request with new token
+                const token = getToken();
+                if (token) {
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                  return api(originalRequest);
+                }
+                throw new Error('No token available');
+              })
+              .catch(() => {
+                // If refresh fails, redirect to login
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem(TOKEN_KEY);
+                  localStorage.removeItem(REFRESH_TOKEN_KEY);
+                  localStorage.removeItem(USER_KEY);
+                  window.location.href = '/login';
+                }
+                return Promise.reject(error);
+              });
+          } else {
+            // If already refreshing, wait for it to complete
+            return new Promise((resolve, reject) => {
+              const checkRefresh = setInterval(() => {
+                if (!window.isRefreshing) {
+                  clearInterval(checkRefresh);
+                  const token = getToken();
+                  if (token) {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    resolve(api(originalRequest));
+                  } else {
+                    reject(error);
+                  }
+                }
+              }, 100);
             });
+          }
         }
       }
     }
@@ -290,9 +308,16 @@ export const authService = {
     try {
       window.isRefreshing = true;
       
-      const response = await api.post<RefreshTokenResponse>('/auth/refresh', {
-        refresh_token: refreshToken
+      // Create a separate axios instance for refresh to avoid interceptors
+      const refreshApi = axios.create({
+        baseURL: API_URL,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        withCredentials: true
       });
+
+      const response = await refreshApi.post<RefreshTokenResponse>(`/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`);
 
       const { access_token, refresh_token } = response.data;
       

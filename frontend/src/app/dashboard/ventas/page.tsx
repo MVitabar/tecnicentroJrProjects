@@ -32,6 +32,8 @@ export default function VentasPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // Mostrar 10 elementos por página
 
   const handleViewOrder = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
@@ -84,6 +86,7 @@ export default function VentasPage() {
         : ordersData;
 
       setOrders(filteredOrders);
+      setCurrentPage(1); // Resetear a la primera página cuando cambian los datos
     } catch (error) {
       console.error("Error al cargar datos:", error);
       toast.error("No se pudieron cargar los datos");
@@ -95,6 +98,16 @@ export default function VentasPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Lógica de paginación
+  const totalPages = Math.ceil(orders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedOrders = orders.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,7 +300,10 @@ export default function VentasPage() {
               
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Info className="h-3.5 w-3.5" />
-                <span>Mostrando {orders.length} {orders.length === 1 ? 'venta' : 'ventas'}</span>
+                <span>
+                  Mostrando {paginatedOrders.length} de {orders.length} ventas
+                  {currentPage > 1 && ` (página ${currentPage} de ${totalPages})`}
+                </span>
               </div>
             </div>
           </div>
@@ -309,8 +325,8 @@ export default function VentasPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.length > 0 ? (
-                    orders.map((order) => {
+                  {paginatedOrders.length > 0 ? (
+                    paginatedOrders.map((order) => {
                       
                       const shortDate = order.createdAt
                         ? format(new Date(order.createdAt), 'dd/MM/yy')
@@ -432,6 +448,60 @@ export default function VentasPage() {
               </Table>
             </div>
           </div>
+          
+          {/* Controles de paginación */}
+          {orders.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-4 py-3 border-t">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>
+                  Página {currentPage} de {totalPages}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="h-8 w-8 p-0"
+                >
+                  <span className="sr-only">Página anterior</span>
+                  ←
+                </Button>
+                
+                {/* Números de página */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                    if (pageNum > totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 w-8 p-0"
+                >
+                  <span className="sr-only">Página siguiente</span>
+                  →
+                </Button>
+              </div>
+            </div>
+          )}
           
           {orders.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">

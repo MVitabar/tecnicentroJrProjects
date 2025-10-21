@@ -232,9 +232,9 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
                 <Label className="text-right font-medium pt-2">Precio</Label>
                 <div className="col-span-3">
                   <p className="font-medium">
-                    {new Intl.NumberFormat('es-AR', {
+                    {new Intl.NumberFormat('es-PE', {
                       style: 'currency',
-                      currency: 'ARS'
+                      currency: 'PEN'
                     }).format(currentService.price)}
                   </p>
                 </div>

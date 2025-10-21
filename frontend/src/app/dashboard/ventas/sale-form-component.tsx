@@ -400,6 +400,9 @@ export function SaleForm({
     const images = newItem.images || [];
     const notes = newItem.notes || "";
 
+    // Para servicios, la cantidad siempre debe ser 1
+    const finalQuantity = newItem.type === "service" ? 1 : quantity;
+
     if (newItem.type === "product") {
       // Para productos, necesitamos el ID del producto
       const product = products.find((p) => p.id === newItem.id);
@@ -430,7 +433,7 @@ export function SaleForm({
         },
         "service",
         notes,
-        quantity,
+        finalQuantity,
         images
       );
     } else {
@@ -988,7 +991,7 @@ export function SaleForm({
                           >
                             <div className="font-medium">{item.name}</div>
                             <div className="text-sm text-muted-foreground">
-                              ${item.price.toFixed(2)}
+                              S/{item.price.toFixed(2)}
                             </div>
                           </div>
                         ))}
@@ -1002,7 +1005,7 @@ export function SaleForm({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className={newItem.type === "service" ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Precio</label>
                     <input
@@ -1018,18 +1021,20 @@ export function SaleForm({
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Cantidad</label>
-                    <input
-                      type="number"
-                      name="quantity"
-                      value={newItem.quantity}
-                      onChange={handleNewItemChange}
-                      className="w-full p-2 border rounded"
-                      min="1"
-                      required
-                    />
-                  </div>
+                  {newItem.type !== "service" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Cantidad</label>
+                      <input
+                        type="number"
+                        name="quantity"
+                        value={newItem.quantity}
+                        onChange={handleNewItemChange}
+                        className="w-full p-2 border rounded"
+                        min="1"
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {newItem.type === "service" && (
@@ -1172,7 +1177,7 @@ export function SaleForm({
                           <div>
                             <div className="font-medium">{item.name}</div>
                             <div className="text-sm text-gray-500">
-                              ${item.price.toFixed(2)} x {item.quantity} = $
+                              S/{item.price.toFixed(2)} x {item.quantity} = S/
                               {(item.price * item.quantity).toFixed(2)}
                             </div>
                             {item.notes && (
@@ -1182,42 +1187,51 @@ export function SaleForm({
                             )}
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setSelectedItems((prev) =>
-                                  prev.map((i) =>
-                                    i.id === item.id && i.type === item.type
-                                      ? {
-                                          ...i,
-                                          quantity: Math.max(1, i.quantity - 1),
-                                        }
-                                      : i
-                                  )
-                                )
-                              }
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center">
-                              {item.quantity}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setSelectedItems((prev) =>
-                                  prev.map((i) =>
-                                    i.id === item.id && i.type === item.type
-                                      ? { ...i, quantity: i.quantity + 1 }
-                                      : i
-                                  )
-                                )
-                              }
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
+                            {item.type !== "service" && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    setSelectedItems((prev) =>
+                                      prev.map((i) =>
+                                        i.id === item.id && i.type === item.type
+                                          ? {
+                                              ...i,
+                                              quantity: Math.max(1, i.quantity - 1),
+                                            }
+                                          : i
+                                      )
+                                    )
+                                  }
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <span className="w-8 text-center">
+                                  {item.quantity}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    setSelectedItems((prev) =>
+                                      prev.map((i) =>
+                                        i.id === item.id && i.type === item.type
+                                          ? { ...i, quantity: i.quantity + 1 }
+                                          : i
+                                      )
+                                    )
+                                  }
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            {item.type === "service" && (
+                              <span className="w-8 text-center text-muted-foreground">
+                                {item.quantity}
+                              </span>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1235,7 +1249,7 @@ export function SaleForm({
                     <div className="flex justify-between mb-2">
                       <span>Subtotal:</span>
                       <span>
-                        $
+                        S/
                         {selectedItems
                           .reduce(
                             (sum, item) => sum + item.price * item.quantity,
@@ -1249,7 +1263,7 @@ export function SaleForm({
                         <span>Total:</span>
 
                         <span className="font-medium">
-                          $
+                          S/
                           {selectedItems
                             .reduce(
                               (sum, item) => sum + item.price * item.quantity,

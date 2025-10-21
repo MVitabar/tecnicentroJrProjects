@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, X, Info } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { PageHeader } from '@/components/page-header';
@@ -25,14 +25,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 function ClientesContent() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const limit = 10;
 
   const router = useRouter();
   const { toast } = useToast();
@@ -43,7 +40,7 @@ function ClientesContent() {
   };
 
   const handleClientUpdated = (updatedClient: Client) => {
-    setClients(clients.map(client => 
+    setClients(clients.map(client =>
       client.id === updatedClient.id ? updatedClient : client
     ));
     setIsEditModalOpen(false);
@@ -53,19 +50,9 @@ function ClientesContent() {
   const loadClients = useCallback(async () => {
     try {
       setLoading(true);
-      if (searchTerm) {
-        // Usar el endpoint de búsqueda
-        const results = await clientService.searchClients(searchTerm);
-        setClients(results);
-        setTotalItems(results.length);
-        setTotalPages(1);
-      } else {
-        // Cargar todos los clientes con paginación
-        const response = await clientService.getClients(page, limit);
-        setClients(response.data);
-        setTotalPages(response.meta.totalPages);
-        setTotalItems(response.meta.totalItems);
-      }
+      const response = await clientService.getClients(1, 100); // Cargar todos para filtrar localmente
+      setClients(response.data);
+      setFilteredClients(response.data);
     } catch (error) {
       console.error('Error loading clients:', error);
       toast({
@@ -76,26 +63,31 @@ function ClientesContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchTerm, toast]);
+  }, [toast]);
 
   useEffect(() => {
     loadClients();
   }, [loadClients]);
 
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredClients(clients);
+    } else {
+      const filtered = clients.filter((client) =>
+        client.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.dni?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.ruc?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredClients(filtered);
+    }
+  }, [searchTerm, clients]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1); // Reset a la primera página al buscar
-    loadClients();
   };
-
-  // Manejar cambio de página
-  const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
-    }
-  }, [totalPages]);
-
-  
 
   return (
     <div className="space-y-6 p-2 sm:p-4 pb-20 sm:pb-6">
@@ -124,11 +116,23 @@ function ClientesContent() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Buscar clientes..."
+                    placeholder="Buscar por ID, nombre, email, teléfono, DNI o RUC..."
                     className="pl-8 w-full"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm('');
+                        loadClients();
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 <Button type="submit" variant="outline" className="w-full sm:w-auto">
                   Buscar
@@ -143,12 +147,22 @@ function ClientesContent() {
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : clients.length === 0 ? (
+          ) : filteredClients.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No se encontraron clientes
+              {searchTerm.trim()
+                ? `No se encontraron clientes que coincidan con "${searchTerm}"`
+                : "No se encontraron clientes"
+              }
             </div>
           ) : (
             <>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 px-4 pt-4">
+                <Info className="h-3.5 w-3.5" />
+                <span>
+                  Mostrando {filteredClients.length} de {clients.length} clientes
+                  {searchTerm.trim() && ` (filtrados por "${searchTerm}")`}
+                </span>
+              </div>
               {/* Vista de tabla para pantallas medianas y grandes */}
               <div className="hidden md:block">
                 <div className="rounded-md border">
@@ -163,7 +177,7 @@ function ClientesContent() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clients.map((client) => (
+                      {filteredClients.map((client) => (
                         <TableRow key={client.id} className="hover:bg-accent/50">
                           <TableCell className="font-medium">{client.name}</TableCell>
                           <TableCell>
@@ -177,7 +191,7 @@ function ClientesContent() {
                             {client.ruc && <div className="text-sm">RUC: {client.ruc}</div>}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {format(new Date(client.createdAt), 'dd/MM/yy')}
+                            {client.createdAt ? format(new Date(client.createdAt), 'dd/MM/yy') : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end space-x-2">
@@ -230,7 +244,7 @@ function ClientesContent() {
 
               {/* Vista de tarjetas para móviles */}
               <div className="md:hidden space-y-3">
-                {clients.map((client) => (
+                {filteredClients.map((client) => (
                   <Card 
                     key={client.id} 
                     className="overflow-hidden hover:shadow-md transition-shadow"
@@ -290,7 +304,7 @@ function ClientesContent() {
                       
                       <div className="mt-3 pt-3 border-t flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">
-                          Registro: {format(new Date(client.createdAt), 'dd/MM/yy')}
+                          Registro: {client.createdAt ? format(new Date(client.createdAt), 'dd/MM/yy') : 'N/A'}
                         </span>
                         <Button
                           variant="ghost"
@@ -324,33 +338,6 @@ function ClientesContent() {
                     </div>
                   </Card>
                 ))}
-                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-                  <div className="text-sm text-muted-foreground">
-                    Mostrando <span className="font-medium">{(page - 1) * limit + 1}</span> a{' '}
-                    <span className="font-medium">
-                      {Math.min(page * limit, totalItems)}
-                    </span>{' '}
-                    de <span className="font-medium">{totalItems}</span> clientes
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(page - 1)}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(page + 1)}
-                      disabled={page >= totalPages}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
-                </div>
               </div>
             </>
           )}

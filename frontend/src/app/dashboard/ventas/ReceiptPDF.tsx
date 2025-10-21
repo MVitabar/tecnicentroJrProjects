@@ -228,13 +228,13 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
               {item.notes && ` (${item.notes})`}
             </Text>
             <Text style={styles.itemQty}>x{item.quantity}</Text>
-            <Text style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
+            <Text style={styles.itemPrice}>S/{(item.price * item.quantity).toFixed(2)}</Text>
           </View>
         ))}
 
         <View style={styles.totalRow}>
           <Text>TOTAL</Text>
-          <Text>${saleData.total.toFixed(2)}</Text>
+          <Text>S/{saleData.total.toFixed(2)}</Text>
         </View>
       </View>
 

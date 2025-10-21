@@ -64,7 +64,7 @@ export default function VentasPage() {
     }
     
     // Cerrar el diálogo si se completó la orden
-    if (updatedOrder.status === 'COMPLETED') {
+    if (updatedOrder?.status === 'COMPLETED') {
       setIsDetailsOpen(false);
     }
   };
@@ -80,8 +80,9 @@ export default function VentasPage() {
       const filteredOrders = search
         ? ordersData.filter(
             (order) =>
-              order.id.toLowerCase().includes(search.toLowerCase()) ||
-              order.paymentMethod.toLowerCase().includes(search.toLowerCase())
+              order.id?.toLowerCase().includes(search.toLowerCase()) ||
+              order.paymentMethod?.toLowerCase().includes(search.toLowerCase()) ||
+              order.client?.name?.toLowerCase().includes(search.toLowerCase())
           )
         : ordersData;
 
@@ -327,7 +328,6 @@ export default function VentasPage() {
                 <TableBody>
                   {paginatedOrders.length > 0 ? (
                     paginatedOrders.map((order) => {
-                      
                       const shortDate = order.createdAt
                         ? format(new Date(order.createdAt), 'dd/MM/yy')
                         : 'N/A';
@@ -350,7 +350,7 @@ export default function VentasPage() {
                         }
                       };
                       
-                      const status = statusConfig[order.status] || statusConfig.PENDING;
+                      const status = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.PENDING;
                         
                       const clientName = order.client?.name || 'Sin cliente';
                       const productCount = order.orderProducts?.length || 0;
@@ -367,7 +367,7 @@ export default function VentasPage() {
                             <div className="flex flex-col items-center">
                               <span className="text-xs sm:text-sm font-medium">{shortDate}</span>
                               <span className="text-xs text-muted-foreground">
-                                {format(new Date(order.createdAt), 'HH:mm')}
+                                {order.createdAt ? format(new Date(order.createdAt), 'HH:mm') : '-'}
                               </span>
                             </div>
                           </TableCell>
@@ -418,7 +418,7 @@ export default function VentasPage() {
                           </TableCell>
                           <TableCell className="px-2 py-3 text-right">
                             <span className="text-sm font-medium whitespace-nowrap">
-                              ${order.totalAmount.toLocaleString('es-AR')}
+                              S/{(order.totalAmount || 0).toLocaleString('es-PE')}
                             </span>
                           </TableCell>
                           <TableCell className="px-2 py-3">

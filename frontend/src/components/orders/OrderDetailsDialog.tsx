@@ -143,7 +143,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                 </div>
                 <div className="space-y-1">
                   <p className="text-muted-foreground">Total</p>
-                  <p className="font-medium">${order.totalAmount.toFixed(2)}</p>
+                  <p className="font-medium">S/{(order.totalAmount || 0).toFixed(2)}</p>
                 </div>
                 {order.client && (
                   <div className="space-y-1">
@@ -183,10 +183,10 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                           </td>
                           <td className="p-2 text-right">{item.quantity}</td>
                           <td className="p-2 text-right">
-                            ${(item.unitPrice || getProductInfo(item)?.price || 0).toFixed(2)}
+                            S/{(item.unitPrice || getProductInfo(item)?.price || 0).toFixed(2)}
                           </td>
                           <td className="p-2 text-right font-medium">
-                            ${((item.unitPrice || getProductInfo(item)?.price || 0) * item.quantity).toFixed(2)}
+                            S/{((item.unitPrice || getProductInfo(item)?.price || 0) * item.quantity).toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -195,11 +195,11 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                       <tr className="border-t bg-muted/25">
                         <td colSpan={3} className="p-2 text-right font-medium">Total Productos:</td>
                         <td className="p-2 text-right font-medium">
-                          ${
-                            (order.orderProducts || [])
+                          S/
+                            {(order.orderProducts || [])
                               .reduce((sum, item) => sum + ((item.unitPrice || 0) * item.quantity), 0)
                               .toFixed(2)
-                          }
+                            }
                         </td>
                       </tr>
                     </tfoot>
@@ -230,12 +230,12 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                                service.type === 'DIAGNOSTIC' ? 'Diagnóstico' : 'Otro'}
                             </Badge>
                             <Badge variant="secondary">
-                              ${service.price.toFixed(2)}
+                              S/{service.price.toFixed(2)}
                             </Badge>
                           </div>
                         </div>
-                        <Badge className={statusColors[service.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}>
-                          {statusText[service.status as keyof typeof statusText] || service.status}
+                        <Badge className={statusColors[service.status] || statusColors.PENDING}>
+                          {statusText[service.status as keyof typeof statusText] || (service.status || 'Sin estado')}
                         </Badge>
                       </div>
                       
@@ -273,7 +273,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                 </div>
                 {order.services.some(s => s.price > 0) && (
                   <div className="text-right font-medium">
-                    <p>Total Servicios: $
+                    <p>Total Servicios: S/
                       {order.services
                         .reduce((sum, service) => sum + service.price, 0)
                         .toFixed(2)}
@@ -289,7 +289,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Total General</h3>
                   <p className="text-lg font-bold">
-                    ${order.totalAmount.toFixed(2)}
+                    S/{(order.totalAmount || 0).toFixed(2)}
                   </p>
                 </div>
               </div>

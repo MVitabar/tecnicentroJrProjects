@@ -7,7 +7,7 @@ import { Product } from '@/types/product.types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Info } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -20,6 +20,7 @@ interface ProductFormData {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,7 +41,8 @@ export default function ProductsPage() {
     try {
       setLoading(true);
       const data = await productService.getProducts(1, 100, searchTerm);
-      setProducts(data.data);
+      setProducts(data.data || []);
+      setFilteredProducts(data.data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
@@ -61,6 +63,22 @@ export default function ProductsPage() {
     fetchProducts();
   }, [isAuthenticated, router, fetchProducts]);
 
+  // Filtro local para búsqueda en tiempo real
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter((product) =>
+        product.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (typeof product.description === 'string' && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchTerm, products]);
+
   // Efecto para búsqueda con debounce
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,7 +86,7 @@ export default function ProductsPage() {
         fetchProducts();
       }
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, [searchTerm, isAuthenticated, fetchProducts]);
 
@@ -174,12 +192,31 @@ export default function ProductsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <Input
             type="text"
-            placeholder="Buscar productos..."
-            className="pl-10"
+            placeholder="Buscar por ID, nombre, SKU o categoría..."
+            className="pl-10 pr-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && fetchProducts()}
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                fetchProducts();
+              }}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+          <Info className="h-3.5 w-3.5" />
+          <span>
+            Mostrando {filteredProducts.length} de {products.length} productos
+            {searchTerm.trim() && ` (filtrados por "${searchTerm}")`}
+          </span>
         </div>
       </div>
 
@@ -187,13 +224,18 @@ export default function ProductsPage() {
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
         </div>
-      ) : products.length === 0 ? (
+      ) : filteredProducts.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">No se encontraron productos</p>
+          <p className="text-gray-500">
+            {searchTerm.trim()
+              ? `No se encontraron productos que coincidan con "${searchTerm}"`
+              : "No se encontraron productos"
+            }
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <Card key={product.id} className="h-full flex flex-col">
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -218,7 +260,7 @@ export default function ProductsPage() {
                   )}
                 </div>
                 <p className="text-muted-foreground">
-                  ${product.price.toFixed(2)}
+                  S/{product.price.toFixed(2)}
                   <span className="ml-2 text-sm text-green-500">
                     {product.stock} en stock
                   </span>
@@ -226,8 +268,8 @@ export default function ProductsPage() {
               </CardHeader>
               <CardContent className="flex-grow">
                 <p className="text-sm text-gray-600 mb-4">
-                  {typeof product.description === 'string' 
-                    ? product.description 
+                  {typeof product.description === 'string' && product.description !== null
+                    ? product.description
                     : 'Sin descripción'}
                 </p>
               </CardContent>

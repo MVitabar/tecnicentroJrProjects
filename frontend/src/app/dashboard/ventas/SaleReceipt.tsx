@@ -185,10 +185,11 @@ const SaleReceipt: React.FC<SaleReceiptProps> = ({ saleData, businessInfo }) => 
             {/* Header con logo e información de la empresa */}
             <View style={styles.logoContainer}>
               {/* Logo temporalmente comentado para debugging */}
-              {/* <Image
+               {/* eslint-disable-next-line jsx-a11y/alt-text */}
+               <Image
                 src={logo}
                 style={styles.logo}
-              /> */}
+              /> 
               <View style={[styles.headerInfo, { flex: 1, marginLeft: 0 }]}>
                 <View style={styles.header}>
                   <Text style={styles.title}>{businessInfo.name}</Text>

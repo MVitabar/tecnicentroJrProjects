@@ -107,6 +107,7 @@ export const productService = {
         name: extractValue((productData as { name?: unknown }).name),
         description: extractValue((productData as { description?: unknown }).description),
         price: extractValue((productData as { price?: unknown }).price),
+        buycost: extractValue((productData as { buycost?: unknown }).buycost),
         stock: extractValue((productData as { stock?: unknown }).stock)
       };
 
@@ -115,6 +116,7 @@ export const productService = {
         name: String(processedData.name || '').trim(),
         description: processedData.description ? String(processedData.description).trim() : undefined,
         price: parseFloat(String(processedData.price || '0').replace(',', '.')),
+        buycost: processedData.buycost !== undefined ? parseFloat(String(processedData.buycost || '0').replace(',', '.')) : undefined,
         stock: processedData.stock !== undefined ? Math.max(0, parseInt(String(processedData.stock), 10)) : 0
       };
 
@@ -125,6 +127,10 @@ export const productService = {
       
       if (isNaN(productToSend.price) || productToSend.price <= 0) {
         throw new Error('El precio debe ser un número mayor a cero');
+      }
+
+      if (productToSend.buycost === undefined || isNaN(productToSend.buycost) || productToSend.buycost <= 0) {
+        throw new Error('El costo de compra es obligatorio y debe ser un número mayor a cero');
       }
 
       // Log de depuración
@@ -217,6 +223,14 @@ export const productService = {
           throw new Error('El precio debe ser un número mayor a cero');
         }
         updateData.price = parsedPrice;
+      }
+      
+      if (cleanProductData.buycost !== undefined) {
+        const parsedBuycost = parseFloat(String(cleanProductData.buycost).replace(',', '.'));
+        if (isNaN(parsedBuycost) || parsedBuycost <= 0) {
+          throw new Error('El costo de compra debe ser un número mayor a cero');
+        }
+        updateData.buycost = parsedBuycost;
       }
       
       if (cleanProductData.stock !== undefined) {

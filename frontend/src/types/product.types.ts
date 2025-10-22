@@ -10,7 +10,9 @@ export interface Product {
   name: string;
   description: string | Record<string, unknown>; // Handle the {} case in the response
   price: number;
+  buycost: number; // Campo obligatorio agregado
   stock: number;
+  stockTreshold?: number; // ❌ Campo opcional de la API (default: 1)
   sku?: string;
   category?: string;
   image?: string;

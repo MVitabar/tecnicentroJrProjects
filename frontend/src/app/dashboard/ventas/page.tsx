@@ -6,7 +6,6 @@ import { productService, type Product } from "@/services/product.service";
 import { SaleForm } from "./sale-form-component";
 import type { SaleData } from '@/types/sale.types';
 
-type ServiceType = 'REPAIR' | 'MAINTENANCE' | 'DIAGNOSTIC' | 'OTHER';
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,15 +125,14 @@ export default function VentasPage() {
             name: string;
             description?: string;
             price: number;
-            type?: string;
+            type: 'REPAIR' | 'WARRANTY';
             photoUrls?: string[];
           }> 
         : [];
 
       // Función para asegurar que el tipo de servicio sea válido
-      const getValidServiceType = (type?: string): ServiceType => {
-        const validTypes: ServiceType[] = ['REPAIR', 'MAINTENANCE', 'DIAGNOSTIC', 'OTHER'];
-        return validTypes.includes(type as ServiceType) ? type as ServiceType : 'REPAIR';
+      const getValidServiceType = (type?: string) => {
+        return type === 'WARRANTY' ? 'WARRANTY' : 'REPAIR';
       };
 
       // Transformar los datos al formato esperado por el backend
@@ -155,7 +153,7 @@ export default function VentasPage() {
           name: string;
           description?: string;
           price: number;
-          type: 'REPAIR' | 'MAINTENANCE' | 'DIAGNOSTIC' | 'OTHER';
+          type: 'REPAIR' | 'WARRANTY';
           photoUrls?: string[];
         }>;
         status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
@@ -194,13 +192,13 @@ export default function VentasPage() {
       
       const newOrder = await orderService.createOrder(orderDataForBackend);
       setOrders(prevOrders => [newOrder, ...prevOrders]);
-      setIsFormOpen(false);
+      // No cerrar el modal aquí, dejar que el componente hijo maneje el cierre
       toast.success('Orden registrada exitosamente');
-      return true;
+      return { success: true, orderId: newOrder.id, orderNumber: newOrder.orderNumber };
     } catch (error) {
       console.error('Error al crear la orden:', error);
       toast.error(`Error al crear la orden: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-      return false;
+      return { success: false };
     }
   };
 
@@ -542,7 +540,8 @@ export default function VentasPage() {
               ...p,
             }))
           };
-          return handleCreateOrder(transformedData);
+          const result = await handleCreateOrder(transformedData);
+          return result;
         }}
         products={products}
       />

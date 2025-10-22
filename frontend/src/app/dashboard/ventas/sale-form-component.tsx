@@ -21,7 +21,9 @@ import { useReactToPrint } from "react-to-print";
 import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer } from "@react-pdf/renderer";
-import ReceiptPDF from "./ReceiptPDF";
+import { Document, Page, View, Text, StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +40,7 @@ type CartItem = {
   type: "product" | "service" | "custom";
   notes?: string;
   images?: File[];
+  serviceType?: 'REPAIR' | 'WARRANTY'; // Added service type field
   // Add these to match ProductOrder
   productId?: string;
   unitPrice?: number;
@@ -45,12 +48,13 @@ type CartItem = {
 
 interface NewItemForm {
   id: string;
-  type: "product" | "service" | "";
+  type: "product" | "service" | "custom" | "";
   name: string;
   price: string;
   quantity: string;
   notes: string;
   images: File[];
+  serviceType?: 'REPAIR' | 'WARRANTY'; // Added service type field
   // Add these to match ProductOrder
   productId?: string;
   unitPrice?: number;
@@ -86,7 +90,7 @@ type SaleData = {
     name: string;
     description: string;
     price: number;
-    type: "REPAIR" | "MAINTENANCE" | "INSTALLATION" | "OTHER";
+    type: "REPAIR" | "WARRANTY"; // Updated to match backend specification
     photoUrls: string[];
   }>;
 };
@@ -96,7 +100,7 @@ type SaleData = {
 type SaleFormProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: SaleData) => Promise<boolean>;
+  onSubmit: (data: SaleData) => Promise<{ success: boolean; orderId?: string; orderNumber?: string }>;
   products: Product[];
   services?: Service[];
 };
@@ -111,10 +115,14 @@ export function SaleForm({
   const [searchTerm, setSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [saleData] = useState<SaleData | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showPrintConfirm, setShowPrintConfirm] = useState(false);
+  const [showProductOnlyConfirm, setShowProductOnlyConfirm] = useState(false);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
   // Estados para el seguimiento de carga de imágenes
   const [uploadStatus, setUploadStatus] = useState<{
     inProgress: boolean;
@@ -141,6 +149,7 @@ export function SaleForm({
     quantity: "1",
     notes: "",
     images: [],
+    serviceType: "REPAIR", // Default service type
   });
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setNewItem((prev) => {
@@ -186,6 +195,7 @@ export function SaleForm({
     documentNumber: string;
     email: string;
     address: string;
+    ruc?: string; // Added RUC field
     notes: string;
   }
 
@@ -195,6 +205,7 @@ export function SaleForm({
     documentNumber: "",
     email: "",
     address: "",
+    ruc: "",
     notes: "",
   });
 
@@ -249,55 +260,88 @@ export function SaleForm({
     return isValid;
   };
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const receiptRef = useRef<HTMLDivElement>(null);
+  const handlePrintConfirm = () => {
+    setShowPrintConfirm(false);
+    // El reset se hace automáticamente después de 2 segundos
+    setTimeout(() => {
+      // Para ventas con servicios, imprimir desde el PDFViewer
+      if (showPdfPreview) {
+        window.print();
+      }
+      resetSaleState(); // Reset después de imprimir
+      onClose(); // Cerrar el modal padre después de imprimir
+    }, 100);
+  };
 
-  // Configurar la impresión del PDF
+  const handlePrintCancel = () => {
+    setShowPrintConfirm(false);
+    // El reset se hace automáticamente después de 2 segundos
+    setTimeout(() => {
+      resetSaleState(); // Reset después de no imprimir
+      onClose(); // Cerrar el modal padre
+    }, 100);
+  };
+
+  const handleProductOnlyConfirmYes = () => {
+    setShowProductOnlyConfirm(false);
+    // El reset se hace automáticamente después de 2 segundos
+    setTimeout(() => {
+      // Para ventas solo con productos, imprimir desde el PDFViewer
+      if (showPdfPreview) {
+        window.print();
+      } else {
+        // Si no hay PDF preview, usar el contenido HTML
+        if (receiptRef.current) {
+          const printContent = receiptRef.current.innerHTML;
+          const originalContent = document.body.innerHTML;
+          document.body.innerHTML = printContent;
+          window.print();
+          document.body.innerHTML = originalContent;
+        }
+      }
+      resetSaleState(); // Reset después de imprimir
+      onClose(); // Cerrar el modal padre después de imprimir
+    }, 100);
+  };
+
+  const handleProductOnlyConfirmNo = () => {
+    setShowProductOnlyConfirm(false);
+    // El reset se hace automáticamente después de 2 segundos
+    setTimeout(() => {
+      resetSaleState(); // Reset después de no imprimir
+      onClose(); // Cerrar el modal padre
+    }, 100);
+  };
+
   const printOptions = {
-    content: () => receiptRef.current,
+    contentRef: receiptRef,
     onBeforeGetContent: () => {
-      setIsPrinting(true);
       return new Promise<void>((resolve) => {
         setTimeout(resolve, 500);
       });
     },
     onAfterPrint: () => {
-      setIsPrinting(false);
+      setOrderId(null); // Limpiar orderId después de imprimir
+      setOrderNumber(null); // Limpiar orderNumber después de imprimir
       onClose();
     },
     removeAfterPrint: true,
   } as const;
+  const handlePrint = useReactToPrint(printOptions);
 
-  const handlePrint = useReactToPrint(
-    printOptions as Parameters<typeof useReactToPrint>[0]
-  );
-
-  // Efecto para manejar la impresión después de guardar la venta
   useEffect(() => {
-    if (saleData && !isPrinting) {
-      const timer = setTimeout(() => {
-        handlePrint();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [saleData, isPrinting, handlePrint]);
+    if (showPdfPreview) {
+      console.log("🎬 Vista previa PDF abierta");
+      console.log("🎬 Estado actual - selectedItems:", selectedItems.length);
+      console.log("🎬 Estado actual - orderNumber:", orderNumber);
 
-  // Cerrar el dropdown al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false);
+      if (orderNumber) {
+        console.log("✅ OrderNumber disponible:", orderNumber);
+      } else {
+        console.log("❌ OrderNumber NO disponible - esto es el problema");
       }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
+    }
+  }, [showPdfPreview, selectedItems, orderNumber, orderId]);
 
   const filteredItems = (): (Product | Service)[] => {
     if (!searchTerm.trim()) return [];
@@ -358,6 +402,7 @@ export function SaleForm({
         newState.price = "";
         newState.quantity = "1";
         newState.notes = "";
+        newState.serviceType = "REPAIR"; // Reset service type
         setSearchTerm("");
       }
 
@@ -417,7 +462,9 @@ export function SaleForm({
         },
         "product",
         notes,
-        quantity
+        quantity,
+        [],
+        undefined // serviceType no aplica para productos
       );
     } else if (newItem.type === "service") {
       // Para servicios, generamos un ID temporal
@@ -434,7 +481,8 @@ export function SaleForm({
         "service",
         notes,
         finalQuantity,
-        images
+        images,
+        newItem.serviceType || "REPAIR" // serviceType del formulario
       );
     } else {
       // Para ítems personalizados
@@ -446,7 +494,9 @@ export function SaleForm({
         },
         "custom",
         notes,
-        quantity
+        quantity,
+        [],
+        undefined // serviceType no aplica para personalizados
       );
     }
 
@@ -459,6 +509,7 @@ export function SaleForm({
       quantity: "1",
       notes: "",
       images: [],
+      serviceType: "REPAIR", // Reset service type
     });
   };
 
@@ -468,7 +519,8 @@ export function SaleForm({
     type: CartItem["type"],
     notes: string = "",
     quantity: number = 1,
-    images: File[] = []
+    images: File[] = [],
+    serviceType?: 'REPAIR' | 'WARRANTY' // Added serviceType parameter
   ): void => {
     setSelectedItems((prev: CartItem[]): CartItem[] => {
       const existingItem = prev.find((i: CartItem) => {
@@ -506,6 +558,11 @@ export function SaleForm({
             serviceItem.images = [...(i.images || []), ...images];
           }
 
+          // Update serviceType if this is a service
+          if (type === "service") {
+            (updatedItem as CartItem & { serviceType: string }).serviceType = serviceType || "REPAIR";
+          }
+
           return updatedItem as CartItem;
         });
       }
@@ -518,10 +575,65 @@ export function SaleForm({
         notes: type === "service" ? notes : "",
         ...(type === "product" && { productId: item.productId || item.id }),
         ...(type === "service" && { images }),
+        ...(type === "service" && { serviceType: serviceType || "REPAIR" }),
       } as CartItem;
 
       return [...prev, newItem];
     });
+  };
+
+  // Reset completo del estado de la venta
+  const resetSaleState = () => {
+    console.log("🧹 Iniciando reset del estado de venta");
+
+    setSelectedItems([]); // Limpiar el carrito
+    setCustomerData({
+      name: "",
+      phone: "",
+      documentNumber: "",
+      email: "",
+      address: "",
+      ruc: "",
+      notes: "",
+    });
+    setErrors({}); // Limpiar errores de validación
+    setSearchTerm(""); // Limpiar búsqueda
+    setIsDropdownOpen(false); // Cerrar dropdown
+    setUploadStatus({
+      inProgress: false,
+      progress: 0,
+      error: null,
+      uploadedFiles: [],
+      failedFiles: [],
+    });
+    setShowPdfPreview(false); // Cerrar vista previa del PDF
+    setShowUploadError(false);
+    setForceSubmit(false);
+    setOrderId(null);
+    setOrderNumber(null);
+    // Reset newItem form
+    setNewItem({
+      id: "",
+      type: "",
+      name: "",
+      price: "",
+      quantity: "1",
+      notes: "",
+      images: [],
+      serviceType: "REPAIR",
+    });
+
+    // Solo cerrar el modal de confirmación si no está siendo usado
+    if (!showProductOnlyConfirm) {
+      setShowProductOnlyConfirm(false);
+    }
+
+    // Solo cerrar el PDF preview si no está siendo usado
+    if (!showPdfPreview) {
+      setShowPdfPreview(false);
+    }
+
+    console.log("✅ Estado de venta reseteado completamente");
   };
 
   // Datos por defecto del cliente para ventas solo con productos
@@ -543,7 +655,7 @@ export function SaleForm({
     // Verificar si hay servicios en la venta
     const hasServices = selectedItems.some((item) => item.type === "service");
 
-    // Si hay servicios, validar los datos del cliente
+    // Si hay servicios, usar el flujo actual
     if (hasServices) {
       if (!validateForm()) {
         const firstErrorField = Object.keys(errors)[0];
@@ -613,7 +725,7 @@ export function SaleForm({
                 typeof item.price === "string"
                   ? parseFloat(item.price)
                   : item.price,
-              type: "REPAIR" as const,
+              type: item.serviceType === "WARRANTY" ? "WARRANTY" as const : "REPAIR" as const,
               photoUrls,
             };
           })
@@ -635,6 +747,7 @@ export function SaleForm({
             phone: customerData.phone,
             address: customerData.address || "",
             dni: customerData.documentNumber,
+            ...(customerData.ruc && { ruc: customerData.ruc }),
           }
         : defaultClientInfo;
 
@@ -645,30 +758,40 @@ export function SaleForm({
       };
 
       console.log("Enviando datos de venta:", saleData);
-      const success = await onSubmit(saleData);
+      const result = await onSubmit(saleData);
 
-      if (success) {
-        // Limpiar el formulario después de una venta exitosa
-        setSelectedItems([]);
-        setCustomerData({
-          name: "",
-          phone: "",
-          documentNumber: "",
-          email: "",
-          address: "",
-          notes: "",
-        });
-        setPaymentMethod("CASH");
-        setUploadStatus({
-          inProgress: false,
-          progress: 0,
-          error: null,
-          uploadedFiles: [],
-          failedFiles: [],
-        });
-        setShowUploadError(false);
-        setForceSubmit(false);
-        toast.success("Venta registrada con éxito");
+      if (result.success) {
+        // Guardar el orderNumber para mostrarlo en el PDF
+        setOrderNumber(result.orderNumber || null);
+
+        // ✅ FLUJO DIFERENTE SEGÚN TIPO DE VENTA
+
+        if (hasServices) {
+          // Si hay servicios: mostrar vista previa PDF directamente
+          setTimeout(() => {
+            console.log("📋 Mostrando vista previa PDF con delay para asegurar datos");
+            setShowPdfPreview(true);
+          }, 100);
+        } else {
+          // Si NO hay servicios (solo productos): también mostrar vista previa PDF
+          setTimeout(() => {
+            console.log("📋 Mostrando vista previa PDF para productos con delay para asegurar datos");
+            setShowPdfPreview(true);
+          }, 100);
+        }
+
+        // Reset automático después de completar la venta exitosamente
+        // Solo si NO hay servicios (porque para productos se muestra modal de confirmación)
+        if (hasServices) {
+          setTimeout(() => {
+            console.log("🔄 Reseteando formulario después de venta exitosa (con servicios)");
+            resetSaleState();
+            console.log("✅ Formulario reseteado automáticamente");
+          }, 2000);
+        } else {
+          // Para productos, NO hacer reset automático aquí - se hace en las funciones del modal
+          console.log("📋 Modal de confirmación se mostrará para productos - reset se hará después");
+        }
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
@@ -756,6 +879,29 @@ export function SaleForm({
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="documentNumber" className="text-foreground/90">
+            DNI
+            {selectedItems.some((item) => item.type === "service") && (
+              <span className="text-destructive ml-1">*</span>
+            )}
+          </Label>
+          <Input
+            id="documentNumber"
+            value={customerData.documentNumber}
+            onChange={(e) => {
+              setCustomerData({ ...customerData, documentNumber: e.target.value });
+              if (errors.documentNumber) setErrors({ ...errors, documentNumber: undefined });
+            }}
+            placeholder="12345678"
+            maxLength={8}
+            className={`mt-1 ${errors.documentNumber ? "border-destructive" : ""}`}
+          />
+          {errors.documentNumber && (
+            <p className="text-sm text-destructive mt-1.5">{errors.documentNumber}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="address" className="text-foreground/90">
             Dirección
           </Label>
@@ -771,29 +917,18 @@ export function SaleForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="documentNumber" className="text-foreground/90">
-            Número de DNI
-            {selectedItems.some((item) => item.type === "service") && (
-              <span className="text-destructive ml-1">*</span>
-            )}
+          <Label htmlFor="ruc" className="text-foreground/90">
+            RUC (opcional)
           </Label>
           <Input
-            id="documentNumber"
-            value={customerData.documentNumber}
+            id="ruc"
+            value={customerData.ruc || ""}
             onChange={(e) =>
-              setCustomerData({
-                ...customerData,
-                documentNumber: e.target.value,
-              })
+              setCustomerData({ ...customerData, ruc: e.target.value })
             }
-            placeholder="Número de DNI"
-            className={`mt-1 ${errors.documentNumber ? "border-destructive" : ""}`}
+            placeholder="Número de RUC"
+            className="mt-1"
           />
-          {errors.documentNumber && (
-            <p className="text-sm text-destructive mt-1.5">
-              {errors.documentNumber}
-            </p>
-          )}
         </div>
 
         <div className="space-y-2 md:col-span-2">
@@ -826,6 +961,135 @@ export function SaleForm({
       )}
     </div>
   );
+
+// Registrar la imagen del logo
+const logo = '/icons/logo-jr-g.png';
+
+// Registrar fuentes
+Font.register({
+  family: 'Helvetica',
+  fonts: [
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf', fontWeight: 400 },
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 700 },
+  ],
+});
+
+const styles = StyleSheet.create({
+  page: {
+    flexDirection: 'column',
+    backgroundColor: '#ffffff',
+    padding: 10,
+    fontFamily: 'Helvetica',
+    fontSize: 8,
+  },
+  receiptContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    padding: 8,
+  },
+  receipt: {
+    marginBottom: 10,
+    border: '1px solid #e2e8f0',
+    borderRadius: 3,
+    padding: 8,
+    position: 'relative',
+    fontSize: 8,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  logo: {
+    width: '80px',
+    height: 'auto',
+    marginRight: 10,
+  },
+  headerInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  header: {
+    marginBottom: 10,
+    textAlign: 'center',
+    borderBottom: '1px solid #e2e8f0',
+    paddingBottom: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  subtitle: {
+    fontSize: 10,
+    color: '#64748b',
+    marginBottom: 5,
+  },
+  section: {
+    marginBottom: 6,
+    fontSize: 8,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginBottom: 3,
+    borderBottom: '1px solid #e2e8f0',
+    paddingBottom: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+    fontSize: 10,
+  },
+  col: {
+    flex: 1,
+  },
+  colRight: {
+    textAlign: 'right',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 0.5,
+    fontSize: 7,
+    lineHeight: 1.1,
+  },
+  itemName: {
+    flex: 3,
+  },
+  itemQty: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  itemPrice: {
+    flex: 2,
+    textAlign: 'right',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 4,
+    borderTop: '1px dashed #cbd5e1',
+    fontWeight: 'bold',
+    fontSize: 10,
+  },
+  footer: {
+    marginTop: 4,
+    fontSize: 6,
+    textAlign: 'center',
+    color: '#64748b',
+    paddingTop: 4,
+    borderTop: '1px solid #e2e8f0',
+  },
+  divider: {
+    borderTop: '1px dashed #cbd5e1',
+    margin: '10px 0',
+  },
+});
+
   const generateReceiptData = () => {
     const items = selectedItems.map((item) => ({
       name: item.name,
@@ -839,12 +1103,10 @@ export function SaleForm({
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const total = subtotal; // Total es igual al subtotal sin IVA
+    const total = subtotal;
 
-    // Verificar si hay servicios en la venta
     const hasServices = selectedItems.some((item) => item.type === "service");
 
-    // Usar datos del cliente real si hay servicios, de lo contrario usar los datos por defecto
     const customerInfo = hasServices
       ? {
           name: customerData.name || "Venta",
@@ -861,7 +1123,7 @@ export function SaleForm({
           address: defaultClientInfo.address,
         };
 
-    return {
+    const result = {
       customerName: customerInfo.name,
       customer: {
         documentNumber: customerInfo.documentNumber,
@@ -872,8 +1134,11 @@ export function SaleForm({
       items,
       subtotal,
       total,
-      paymentMethod,
+      orderId: orderId || undefined,
+      orderNumber: orderNumber || undefined,
     };
+
+    return result;
   };
 
   // Datos de la empresa (puedes mover esto a un archivo de configuración)
@@ -887,10 +1152,8 @@ export function SaleForm({
     footerText: "Gracias por su compra. Vuelva pronto.",
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/90 flex items-start md:items-center justify-center z-50 p-2 md:p-4 overflow-y-auto">
+    <div className={`fixed inset-0 bg-black/90 flex items-start md:items-center justify-center z-50 p-2 md:p-4 overflow-y-auto ${!isOpen ? 'hidden' : ''}`}>
       <div className="bg-background border border-muted rounded-3xl shadow-xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-3 md:p-4 border-b rounded-t-3xl sticky top-0 bg-background z-10">
           <h2 className="text-lg md:text-xl font-semibold">Nueva Venta</h2>
@@ -907,8 +1170,104 @@ export function SaleForm({
           </div>
         </div>
 
+        {/* ✅ Contenido oculto para impresión automática (versión HTML) */}
+        <div
+          ref={receiptRef}
+          className="hidden"
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: '-9999px',
+            width: '300px', // Ancho de ticket térmico
+            padding: '10px',
+            background: 'white',
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            lineHeight: '1.2',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: '0', fontSize: '16px', fontWeight: 'bold' }}>
+              {businessInfo.name}
+            </h3>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              {businessInfo.address}
+            </p>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              Tel: {businessInfo.phone}
+            </p>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              RUC: {businessInfo.ruc}
+            </p>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              <strong>Fecha:</strong> {new Date().toLocaleDateString('es-PE')}
+            </p>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              <strong>Hora:</strong> {new Date().toLocaleTimeString('es-PE')}
+            </p>
+            {orderNumber && (
+              <p style={{ margin: '2px 0', fontSize: '10px' }}>
+                <strong>Orden N°:</strong> {orderNumber}
+              </p>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
+            <p style={{ margin: '2px 0', fontSize: '10px' }}>
+              <strong>Cliente:</strong> {(() => {
+                const hasServices = selectedItems.some((item) => item.type === "service");
+                return hasServices ? (customerData.name || "Cliente") : defaultClientInfo.name;
+              })()}
+            </p>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
+            {selectedItems.map((item) => (
+              <div key={`${item.id}-${item.type}`} style={{ marginBottom: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '10px' }}>
+                    {item.name} x{item.quantity}
+                  </span>
+                  <span style={{ fontSize: '10px' }}>
+                    S/ {(item.price * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+                {item.notes && (
+                  <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>
+                    {item.notes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', padding: '5px 0', marginTop: '5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+              <span style={{ fontSize: '12px' }}>TOTAL:</span>
+              <span style={{ fontSize: '12px' }}>
+                S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '8px', color: '#666' }}>
+            {businessInfo.footerText}
+          </div>
+        </div>
+
         {/* Diálogo de vista previa del PDF */}
-        <Dialog open={showPdfPreview} onOpenChange={setShowPdfPreview}>
+        <Dialog open={showPdfPreview} onOpenChange={(open) => {
+          if (!open) {
+            setShowPdfPreview(false);
+            // Solo cerrar el modal padre si realmente se completó la operación
+            if (!selectedItems.length) {
+              onClose();
+            }
+          }
+        }}>
           <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
             <DialogHeader className="px-6 pt-4 pb-2 border-b">
               <DialogTitle className="text-2xl font-bold">
@@ -916,26 +1275,279 @@ export function SaleForm({
               </DialogTitle>
             </DialogHeader>
             <div className="flex-1 overflow-hidden p-0">
-              <PDFViewer
-                width="100%"
-                height="100%"
-                style={{
-                  border: "none",
-                  minHeight: "calc(98vh - 120px)",
-                }}
-              >
-                <ReceiptPDF
-                  saleData={generateReceiptData()}
-                  businessInfo={businessInfo}
-                />
-              </PDFViewer>
+              {showPdfPreview ? (
+                <PDFViewer
+                  width="100%"
+                  height="100%"
+                  style={{
+                    border: "none",
+                    minHeight: "calc(98vh - 120px)",
+                    backgroundColor: "white",
+                  }}
+                >
+                  {(() => {
+                    console.log("🎬 PDFViewer renderizándose");
+                    const receiptData = generateReceiptData();
+                    console.log("📄 OrderNumber:", receiptData.orderNumber);
+                    console.log("📄 Items:", receiptData.items?.length || 0);
+
+                    // Verificar si hay datos válidos para mostrar en el PDF
+                    const hasValidData = receiptData.items && receiptData.items.length > 0;
+
+                    if (!hasValidData) {
+                      return (
+                        <Document>
+                          <Page size="A4" style={{ padding: 30, backgroundColor: "white" }}>
+                            <View style={{ textAlign: "center", marginTop: 100 }}>
+                              <Text style={{ fontSize: 16, color: "#666" }}>
+                                No hay datos para mostrar en el comprobante
+                              </Text>
+                            </View>
+                          </Page>
+                        </Document>
+                      );
+                    }
+
+                    return (
+                      <Document>
+                        <Page size="A4" style={styles.page}>
+                          <View style={styles.receipt}>
+                            {/* Header con logo */}
+                            <View style={styles.logoContainer}>
+                              <PDFImage
+                                src={logo}
+                                style={styles.logo}
+                              />
+                              <View style={styles.header}>
+                                <Text style={styles.title}>{businessInfo.name}</Text>
+                                <Text style={styles.subtitle}>{businessInfo.address}</Text>
+                                <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
+                                <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
+                                <Text style={styles.subtitle}>{format(new Date(), "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es })}</Text>
+                                {receiptData.orderNumber && (
+                                  <Text style={styles.subtitle}>Orden N°: {receiptData.orderNumber}</Text>
+                                )}
+                              </View>
+                            </View>
+
+                            {/* Datos del cliente */}
+                            <View style={styles.section}>
+                              <Text style={styles.sectionTitle}>Datos del Cliente</Text>
+                              <View style={styles.row}>
+                                <Text>Nombre: {receiptData.customerName || 'Cliente ocasional'}</Text>
+                                {receiptData.customer.documentNumber && (
+                                  <Text>
+                                    DNI: {receiptData.customer.documentNumber}
+                                  </Text>
+                                )}
+                              </View>
+                              {receiptData.customer.phone && (
+                                <View style={styles.row}>
+                                  <Text>Teléfono: {receiptData.customer.phone}</Text>
+                                </View>
+                              )}
+                            </View>
+
+                            {/* Detalle de productos */}
+                            <View style={styles.section}>
+                              <Text style={styles.sectionTitle}>Detalle de la Venta</Text>
+                              <View style={[styles.row, { marginBottom: 5 }]}>
+                                <Text style={[styles.col, { fontWeight: 'bold' }]}>Descripción</Text>
+                                <Text style={[styles.col, { textAlign: 'center', fontWeight: 'bold' }]}>Cant.</Text>
+                                <Text style={[styles.colRight, { fontWeight: 'bold' }]}>Importe</Text>
+                              </View>
+
+                              {receiptData.items.map((item: { name: string; quantity: number; total: number; notes?: string }, index: number) => (
+                                <View key={index} style={styles.itemRow}>
+                                  <Text style={styles.itemName}>
+                                    {item.name}
+                                    {item.notes && ` (${item.notes})`}
+                                  </Text>
+                                  <Text style={styles.itemQty}>x{item.quantity}</Text>
+                                  <Text style={styles.itemPrice}>S/{item.total.toFixed(2)}</Text>
+                                </View>
+                              ))}
+
+                              <View style={styles.totalRow}>
+                                <Text>TOTAL</Text>
+                                <Text>S/{receiptData.total.toFixed(2)}</Text>
+                              </View>
+                            </View>
+
+                            {/* Footer */}
+                            <View style={styles.footer}>
+                              <Text>{businessInfo.footerText}</Text>
+                              <Text>Gracias por su compra - CLIENTE</Text>
+                            </View>
+                          </View>
+                        </Page>
+                      </Document>
+                    );
+                  })()}
+                </PDFViewer>
+              ) : (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  backgroundColor: "white",
+                  color: "#666"
+                }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 16, marginBottom: 10 }}>
+                      Vista previa del PDF
+                    </div>
+                    <div style={{ fontSize: 14 }}>
+                      Complete una venta para ver el comprobante
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="p-3 border-t flex justify-end bg-gray-50">
+            <div className="p-3 border-t flex justify-between bg-gray-50">
               <Button
-                onClick={() => setShowPdfPreview(false)}
+                variant="outline"
+                onClick={() => {
+                  setShowPdfPreview(false);
+                  // Para ventas solo con productos, mostrar modal de confirmación
+                  const hasServices = selectedItems.some(item => item.type === 'service');
+                  if (!hasServices) {
+                    setShowProductOnlyConfirm(true);
+                  }
+                  // El reset se hace automáticamente después de 2 segundos
+                  onClose();
+                }}
                 className="px-6 py-2 text-base"
               >
                 Cerrar
+              </Button>
+              <Button
+                onClick={() => {
+                  // Imprimir directamente desde el PDFViewer
+                  window.print();
+                  setShowPdfPreview(false);
+                  setTimeout(() => {
+                    handlePrint(); // También usar el contenido HTML como respaldo
+                    // Para ventas solo con productos, mostrar modal de confirmación después de imprimir
+                    const hasServices = selectedItems.some(item => item.type === 'service');
+                    if (!hasServices) {
+                      setTimeout(() => {
+                        setShowProductOnlyConfirm(true);
+                      }, 100);
+                    }
+                    // El reset se hace automáticamente después de 2 segundos
+                    onClose();
+                  }, 100);
+                }}
+                className="px-6 py-2 text-base gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Imprimir PDF
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ✅ Diálogo de confirmación de impresión */}
+        <Dialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Confirmar Impresión
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground">
+                ¿Desea imprimir el recibo de la venta?
+              </p>
+              <div className="mt-4 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground mb-2">
+                  <strong>Resumen de la venta:</strong>
+                </p>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span>Productos:</span>
+                    <span>{selectedItems.filter(item => item.type === 'product').length}</span>
+                  </div>
+                  {selectedItems.some(item => item.type === 'service') && (
+                    <div className="flex justify-between">
+                      <span>Servicios:</span>
+                      <span>{selectedItems.filter(item => item.type === 'service').length}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-medium border-t pt-1">
+                    <span>Total:</span>
+                    <span>
+                      S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={handlePrintCancel}>
+                No imprimir
+              </Button>
+              <Button onClick={handlePrintConfirm} className="gap-2">
+                <FileText className="h-4 w-4" />
+                Sí, imprimir
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ✅ Diálogo de confirmación para ventas solo con productos */}
+        <Dialog open={showProductOnlyConfirm} onOpenChange={setShowProductOnlyConfirm}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Confirmar Impresión de Nota de Venta
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                La venta ha sido registrada exitosamente. ¿Desea imprimir la nota de venta?
+              </p>
+              {(() => {
+                console.log("💬 Modal de confirmación - Estado orderNumber:", orderNumber);
+                console.log("💬 Modal de confirmación - Estado selectedItems:", selectedItems.length);
+                return (
+                  <div className="p-3 bg-muted/50 rounded-md">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      <strong>Detalles de la venta:</strong>
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span>Productos:</span>
+                        <span>{selectedItems.filter(item => item.type === 'product').length}</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t pt-1">
+                        <span>Total:</span>
+                        <span>
+                          S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
+                        </span>
+                      </div>
+                      {orderNumber && (
+                        <div className="flex justify-between font-medium pt-1">
+                          <span>Número de Orden:</span>
+                          <span>{orderNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={handleProductOnlyConfirmNo}>
+                No imprimir
+              </Button>
+              <Button onClick={handleProductOnlyConfirmYes} className="gap-2">
+                <FileText className="h-4 w-4" />
+                Sí, imprimir
               </Button>
             </div>
           </DialogContent>
@@ -964,7 +1576,18 @@ export function SaleForm({
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    {newItem.type === "product" ? "Buscar producto" : "Nombre"}
+                    {(() => {
+                      switch (newItem.type) {
+                        case "product":
+                          return "Buscar producto";
+                        case "service":
+                          return "Nombre del servicio";
+                        case "custom":
+                          return "Nombre del ítem personalizado";
+                        default:
+                          return "Nombre del ítem";
+                      }
+                    })()}
                   </label>
                   <div className="relative" ref={dropdownRef}>
                     <input
@@ -975,9 +1598,18 @@ export function SaleForm({
                       onFocus={handleFocus}
                       className="w-full p-2 border rounded"
                       placeholder={
-                        newItem.type === "product"
-                          ? "Buscar producto..."
-                          : "Nombre del ítem"
+                        (() => {
+                          switch (newItem.type) {
+                            case "product":
+                              return "Buscar producto...";
+                            case "service":
+                              return "Nombre del servicio";
+                            case "custom":
+                              return "Nombre del ítem personalizado";
+                            default:
+                              return "Nombre del ítem";
+                          }
+                        })()
                       }
                       required
                     />
@@ -1006,49 +1638,63 @@ export function SaleForm({
                 </div>
 
                 <div className={newItem.type === "service" ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Precio</label>
-                    <input
-                      type="number"
-                      name="price"
-                      value={newItem.price}
-                      onChange={handleNewItemChange}
-                      className="w-full p-2 border rounded"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      required
-                    />
-                  </div>
+                  {/* ✅ Solo mostrar input de precio para servicios y personalizados */}
+                  {(() => {
+                    const showPrice = newItem.type === "service" || newItem.type === "custom";
+                    const showQuantity = newItem.type !== "service";
 
-                  {newItem.type !== "service" && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Cantidad</label>
-                      <input
-                        type="number"
-                        name="quantity"
-                        value={newItem.quantity}
-                        onChange={handleNewItemChange}
-                        className="w-full p-2 border rounded"
-                        min="1"
-                        required
-                      />
-                    </div>
-                  )}
+                    return (
+                      <>
+                        {showPrice && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Precio</label>
+                            <input
+                              type="number"
+                              name="price"
+                              value={newItem.price}
+                              onChange={handleNewItemChange}
+                              className="w-full p-2 border rounded"
+                              placeholder="0.00"
+                              min="0"
+                              step="0.01"
+                              required
+                            />
+                          </div>
+                        )}
+
+                        {showQuantity && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Cantidad</label>
+                            <input
+                              type="number"
+                              name="quantity"
+                              value={newItem.quantity}
+                              onChange={handleNewItemChange}
+                              className="w-full p-2 border rounded"
+                              min="1"
+                              required
+                            />
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {newItem.type === "service" && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Notas</label>
-                      <textarea
-                        name="notes"
-                        value={newItem.notes}
+                      <label className="text-sm font-medium">Tipo de servicio</label>
+                      <select
+                        name="serviceType"
+                        value={newItem.serviceType || "REPAIR"}
                         onChange={handleNewItemChange}
-                        className="w-full p-2 border rounded"
-                        rows={2}
-                        placeholder="Detalles del servicio..."
-                      />
+                        className="w-full p-2 bg-muted border rounded"
+                        required
+                      >
+                        <option value="REPAIR">Reparación</option>
+                        <option value="WARRANTY">Garantía</option>
+                      </select>
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">
@@ -1151,8 +1797,8 @@ export function SaleForm({
                 </Button>
               </form>
 
-              {/* Sección del cliente */}
-              {renderCustomerForm()}
+              {/* Sección del cliente - solo mostrar si hay servicios */}
+              {selectedItems.some(item => item.type === 'service') && renderCustomerForm()}
             </div>
 
             {/* Panel derecho - Carrito */}
@@ -1275,17 +1921,19 @@ export function SaleForm({
                     </div>
 
                     <div className="mt-6 items-center justify-between space-y-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="lg"
-                        onClick={() => setShowPdfPreview(true)}
-                        disabled={selectedItems.length === 0}
-                        className="gap-1 flex items-center justify-center"
-                      >
-                        <FileText className="h-4 w-4" />
-                        <span>Vista Previa</span>
-                      </Button>
+                      {selectedItems.some(item => item.type === 'service') && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="lg"
+                          onClick={() => setShowPdfPreview(true)}
+                          disabled={selectedItems.length === 0}
+                          className="gap-1 flex items-center justify-center"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Vista Previa</span>
+                        </Button>
+                      )}
                       <div className="w-full space-y-4">
                         {uploadStatus.inProgress && (
                           <div className="w-full bg-background/50 p-3 rounded-lg border">
@@ -1368,6 +2016,7 @@ export function SaleForm({
                                       className="w-full text-destructive border-destructive/50 hover:bg-destructive/5 hover:text-destructive"
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        console.log("🚫 Cancelando subida de imágenes - limpiando componente");
                                         setShowUploadError(false);
                                         setUploadStatus(prev => ({
                                           ...prev,
@@ -1381,6 +2030,11 @@ export function SaleForm({
                                           ...prev,
                                           images: []
                                         }));
+                                        // Limpiar todo el estado si no hay venta en progreso
+                                        if (!selectedItems.length) {
+                                          resetSaleState();
+                                          onClose();
+                                        }
                                       }}
                                     >
                                       Cancelar
@@ -1405,7 +2059,11 @@ export function SaleForm({
                       <Button
                         variant="destructive"
                         className="w-full"
-                        onClick={onClose}
+                        onClick={() => {
+                          console.log("🚫 Cancelando venta - limpiando componente");
+                          resetSaleState(); // Limpiar todo el estado del componente
+                          onClose(); // Cerrar el modal
+                        }}
                       >
                         Cancelar
                       </Button>

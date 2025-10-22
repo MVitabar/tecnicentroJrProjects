@@ -37,7 +37,7 @@ interface Client {
 
 interface Service {
   id: string;
-  type: 'MAINTENANCE' | 'REPAIR' | 'DIAGNOSTIC' | 'OTHER';
+  type: 'REPAIR' | 'WARRANTY'; // Updated to match backend specification
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
   name: string;
   description?: string;
@@ -64,6 +64,7 @@ export interface OrderProduct {
 
 export interface Order {
   id: string;
+  orderNumber: string; // Added orderNumber field
   items: OrderItem[];
   userId: string;
   totalAmount: number;
@@ -101,21 +102,21 @@ export const orderService = {
       name: string;
       description?: string;
       price: number;
-      type: 'MAINTENANCE' | 'REPAIR' | 'DIAGNOSTIC' | 'OTHER';
+      type: 'REPAIR' | 'WARRANTY'; // Updated to match backend specification
       photoUrls?: string[];
     }>;
     status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
   }): Promise<Order> {
     try {
       const token = localStorage.getItem("auth_token");
-      
+
       // Validar que al menos se proporcione clientId o clientInfo
       if (!orderData.clientId && !orderData.clientInfo) {
         throw new Error('Se requiere clientId o clientInfo');
       }
 
       // Validar que se proporcione al menos un producto o servicio
-      if ((!orderData.products || orderData.products.length === 0) && 
+      if ((!orderData.products || orderData.products.length === 0) &&
           (!orderData.services || orderData.services.length === 0)) {
         throw new Error('Se requiere al menos un producto o servicio');
       }
@@ -158,7 +159,7 @@ export const orderService = {
       console.groupEnd();
 
       const response = await api.post<Order>(
-        "orders/create", 
+        "orders/create",
         orderDataToSend,
         {
           headers: {
@@ -176,23 +177,23 @@ export const orderService = {
       return response.data;
     } catch (error) {
       console.error("Error Creating Order");
-      
+
       if (error instanceof Error) {
         console.error("Error Details:", error.message);
-        
+
         if ('response' in error && error.response) {
           const response = error.response as {
             status?: number;
             data?: unknown;
           };
-          
+
           console.error("Response Status:", response.status);
           console.error("Response Data:", response.data);
         }
       } else {
         console.error("Unknown error occurred:", error);
       }
-      
+
       throw error;
     }
   },

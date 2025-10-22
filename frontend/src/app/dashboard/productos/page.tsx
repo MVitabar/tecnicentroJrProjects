@@ -14,8 +14,13 @@ import { useAuth } from '@/contexts/auth-context';
 interface ProductFormData {
   name: string;
   description: string;
-  price: number;
-  stock: number;
+  buycost: number;        // ✅ Campo obligatorio de la API
+  price: number;          // ✅ Campo obligatorio de la API (calculado)
+  stock: number;          // ❌ Campo opcional de la API (default: 0)
+  stockTreshold: number;  // ❌ Campo opcional de la API (default: 1)
+  // Campos adicionales para lógica de cálculo (no se envían a la API)
+  profitType: 'fixed' | 'percentage';
+  profitValue: number;
 }
 
 export default function ProductsPage() {
@@ -29,13 +34,28 @@ export default function ProductsPage() {
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
     description: '',
-    price: 0,
-    stock: 0,
+    buycost: 0,
+    price: 0,           // ✅ Campo obligatorio (se calcula automáticamente)
+    stock: 0,           // ❌ Campo opcional (default: 0)
+    stockTreshold: 1,   // ❌ Campo opcional (default: 1)
+    profitType: 'fixed', // Campo adicional para lógica de cálculo
+    profitValue: 0,     // Campo adicional para lógica de cálculo
   });
 
+  // Inicializar hooks
   const router = useRouter();
   const { toast } = useToast();
   const { isAuthenticated, isAdmin } = useAuth();
+  const calculateFinalPrice = (buycost: number, profitType: 'fixed' | 'percentage', profitValue: number): number => {
+    if (profitType === 'fixed') {
+      return buycost + profitValue;
+    } else {
+      return buycost + (buycost * profitValue / 100);
+    }
+  };
+
+  // Obtener el precio final calculado
+  const finalPrice = calculateFinalPrice(formData.buycost, formData.profitType, formData.profitValue);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -90,25 +110,44 @@ export default function ProductsPage() {
     return () => clearTimeout(timer);
   }, [searchTerm, isAuthenticated, fetchProducts]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'price' || name === 'stock' ? Number(value) : value,
-    }));
+    setFormData(prev => {
+      const updatedData = {
+        ...prev,
+        [name]: name === 'buycost' || name === 'profitValue' || name === 'stock' || name === 'stockTreshold' ? Number(value) : value,
+      };
+
+      // Si cambió el tipo de ganancia, recalcular el precio final
+      if (name === 'profitType') {
+        updatedData.profitType = value as 'fixed' | 'percentage';
+      }
+
+      return updatedData;
+    });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // ✅ Preparar datos para enviar (solo campos válidos para la API)
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        price: finalPrice, // ✅ Usar el precio calculado
+        buycost: formData.buycost,
+        stock: formData.stock,
+        stockTreshold: formData.stockTreshold,
+      };
+
       if (isEditing && currentProduct) {
-        await productService.updateProduct(currentProduct.id, formData);
+        await productService.updateProduct(currentProduct.id, productData);
         toast({
           title: 'Éxito',
           description: 'Producto actualizado correctamente',
         });
       } else {
-        await productService.createProduct(formData);
+        await productService.createProduct(productData);
         toast({
           title: 'Éxito',
           description: 'Producto creado correctamente',
@@ -125,21 +164,25 @@ export default function ProductsPage() {
         variant: 'destructive',
       });
     }
-  };
+  }, [formData, finalPrice, isEditing, currentProduct, toast, fetchProducts]);
 
-  const handleEdit = (product: Product) => {
+  const handleEdit = useCallback((product: Product) => {
     setCurrentProduct(product);
     setFormData({
       name: product.name,
       description: typeof product.description === 'string' ? product.description : '',
-      price: product.price,
+      buycost: product.buycost,
+      price: product.price,           // ✅ Usar precio existente del producto
       stock: product.stock,
+      stockTreshold: product.stockTreshold || 1,
+      profitType: 'fixed',           // ✅ Valor por defecto para cálculo
+      profitValue: product.price - product.buycost, // ✅ Calcular ganancia fija
     });
     setIsEditing(true);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este producto?')) {
       try {
         await productService.deleteProduct(id);
@@ -157,15 +200,19 @@ export default function ProductsPage() {
         });
       }
     }
-  };
+  }, [toast, fetchProducts]);
 
   const openNewProductModal = () => {
     setCurrentProduct(null);
     setFormData({
       name: '',
       description: '',
+      buycost: 0,
       price: 0,
       stock: 0,
+      stockTreshold: 1,
+      profitType: 'fixed',
+      profitValue: 0,
     });
     setIsEditing(false);
     setIsModalOpen(true);
@@ -338,34 +385,101 @@ export default function ProductsPage() {
                     rows={3}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Precio <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      required
-                    />
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Costo de compra <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    name="buycost"
+                    value={formData.buycost}
+                    onChange={handleInputChange}
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+
+                {/* Sección de Calculadora de Precios */}
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="font-medium">Calculadora de Precios</span>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Stock <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      type="number"
-                      name="stock"
-                      value={formData.stock}
-                      onChange={handleInputChange}
-                      min="0"
-                      required
-                    />
+
+                  <div className="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Tipo de ganancia
+                      </label>
+                      <select
+                        name="profitType"
+                        value={formData.profitType}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                      >
+                        <option value="fixed">Monto fijo (S/)</option>
+                        <option value="percentage">Porcentaje (%)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        {formData.profitType === 'fixed' ? 'Ganancia (S/)' : 'Ganancia (%)'}
+                      </label>
+                      <Input
+                        type="number"
+                        name="profitValue"
+                        value={formData.profitValue}
+                        onChange={handleInputChange}
+                        min="0"
+                        step={formData.profitType === 'fixed' ? "0.01" : "1"}
+                        placeholder={formData.profitType === 'fixed' ? "5.00" : "20"}
+                      />
+                    </div>
                   </div>
+
+                  <div className="p-3 bg-background rounded border">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Precio final calculado:</span>
+                      <span className="text-lg font-bold text-primary">
+                        S/ {finalPrice.toFixed(2)}
+                      </span>
+                    </div>
+                    {formData.profitType === 'percentage' && formData.buycost > 0 && (
+                      <div className="text-sm text-muted-foreground mt-1">
+                        ({formData.profitValue}% de S/ {formData.buycost.toFixed(2)})
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Stock <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleInputChange}
+                    min="0"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Alerta de Stock
+                  </label>
+                  <Input
+                    type="number"
+                    name="stockTreshold"
+                    value={formData.stockTreshold}
+                    onChange={handleInputChange}
+                    min="1"
+                    placeholder="1"
+                    required
+                  />
                 </div>
               </div>
               <div className="mt-8 flex justify-end space-x-3 border-t pt-6">

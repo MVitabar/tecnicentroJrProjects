@@ -169,6 +169,8 @@ interface ReceiptPDFProps {
       notes?: string;
     }>;
     total: number;
+    orderId?: string;
+    orderNumber?: string;
   };
   businessInfo: BusinessInfo;
 }
@@ -193,6 +195,12 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
           <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
           <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
           <Text style={styles.subtitle}>{formattedDate}</Text>
+          {saleData.orderNumber && (
+            <Text style={styles.subtitle}>Orden N°: {saleData.orderNumber}</Text>
+          )}
+          {saleData.orderId && !saleData.orderNumber && (
+            <Text style={styles.subtitle}>Orden N°: {saleData.orderId}</Text>
+          )}
         </View>
       </View>
 

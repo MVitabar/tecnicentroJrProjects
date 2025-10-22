@@ -18,17 +18,17 @@ export interface ServiceOrderItem {
   name: string;
   price: number;
   description?: string;
-  type?: string;
+  type: 'REPAIR' | 'WARRANTY'; // Updated to match backend specification
   photoUrls?: string[];
 }
 
 export interface ClientInfo {
   name: string;
-  email: string;
-  phone: string;
+  email?: string;  // Made optional to match backend
+  phone?: string;  // Made optional to match backend
   address?: string;
   dni?: string;
-  ruc?: string;
+  ruc?: string;  // Added to match backend specification
   notes?: string;
 }
 
@@ -50,14 +50,30 @@ export interface CreateOrderDto {
 }
 
 export interface SaleData {
-  // New structure
-  clientInfo?: ClientInfo;
-  products?: ProductOrder[];
-  services?: ServiceOrderItem[];
+  // New structure matching backend specification
+  clientInfo?: {
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    dni?: string;
+    ruc?: string;
+  };
+  products?: Array<{
+    productId: string;
+    quantity: number;
+  }>;
+  services?: Array<{
+    name: string;
+    description?: string;
+    price: number;
+    type: 'REPAIR' | 'WARRANTY'; // Updated to match backend
+    photoUrls?: string[];
+  }>;
   status?: string;
   paymentMethod?: string;
   total?: number;
-  
+
   // Old structure (for backward compatibility)
   items?: CreateOrderItem[];
   customer?: {
@@ -86,6 +102,7 @@ export const isNewSaleData = (data: SaleData): data is Required<Pick<SaleData, '
 // Tipos para respuestas de órdenes/ventas
 export interface Order {
   id: string;
+  orderNumber: string; // Added orderNumber field
   totalAmount: number;
   status: string;
   createdAt: string;

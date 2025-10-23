@@ -30,6 +30,7 @@ export interface CreateSaleRequest {
 
 export interface SaleResponse {
   id: string;
+  orderNumber: string; // Added orderNumber field that backend assigns
   clientInfo: ClientInfo;
   products: Array<{
     productId: string;

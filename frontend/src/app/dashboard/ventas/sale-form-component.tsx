@@ -17,7 +17,6 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useReactToPrint } from "react-to-print";
 import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer } from "@react-pdf/renderer";
@@ -116,8 +115,6 @@ export function SaleForm({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
-  const [showPrintConfirm, setShowPrintConfirm] = useState(false);
-  const [showProductOnlyConfirm, setShowProductOnlyConfirm] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -260,74 +257,49 @@ export function SaleForm({
     return isValid;
   };
 
-  const handlePrintConfirm = () => {
-    setShowPrintConfirm(false);
-    // El reset se hace automáticamente después de 2 segundos
-    setTimeout(() => {
-      // Para ventas con servicios, imprimir desde el PDFViewer
-      if (showPdfPreview) {
-        window.print();
-      }
-      resetSaleState(); // Reset después de imprimir
-      onClose(); // Cerrar el modal padre después de imprimir
-    }, 100);
-  };
+  // Reset completo del estado de la venta
+  const resetSaleState = useCallback(() => {
+    console.log("🧹 Iniciando reset del estado de venta");
 
-  const handlePrintCancel = () => {
-    setShowPrintConfirm(false);
-    // El reset se hace automáticamente después de 2 segundos
-    setTimeout(() => {
-      resetSaleState(); // Reset después de no imprimir
-      onClose(); // Cerrar el modal padre
-    }, 100);
-  };
+    setSelectedItems([]); // Limpiar el carrito
+    setCustomerData({
+      name: "",
+      phone: "",
+      documentNumber: "",
+      email: "",
+      address: "",
+      ruc: "",
+      notes: "",
+    });
+    setErrors({}); // Limpiar errores de validación
+    setSearchTerm(""); // Limpiar búsqueda
+    setIsDropdownOpen(false); // Cerrar dropdown
+    setUploadStatus({
+      inProgress: false,
+      progress: 0,
+      error: null,
+      uploadedFiles: [],
+      failedFiles: [],
+    });
+    setShowPdfPreview(false); // Cerrar vista previa del PDF
+    setShowUploadError(false);
+    setForceSubmit(false);
+    setOrderId(null);
+    setOrderNumber(null);
+    // Reset newItem form
+    setNewItem({
+      id: "",
+      type: "",
+      name: "",
+      price: "",
+      quantity: "1",
+      notes: "",
+      images: [],
+      serviceType: "REPAIR",
+    });
 
-  const handleProductOnlyConfirmYes = () => {
-    setShowProductOnlyConfirm(false);
-    // El reset se hace automáticamente después de 2 segundos
-    setTimeout(() => {
-      // Para ventas solo con productos, imprimir desde el PDFViewer
-      if (showPdfPreview) {
-        window.print();
-      } else {
-        // Si no hay PDF preview, usar el contenido HTML
-        if (receiptRef.current) {
-          const printContent = receiptRef.current.innerHTML;
-          const originalContent = document.body.innerHTML;
-          document.body.innerHTML = printContent;
-          window.print();
-          document.body.innerHTML = originalContent;
-        }
-      }
-      resetSaleState(); // Reset después de imprimir
-      onClose(); // Cerrar el modal padre después de imprimir
-    }, 100);
-  };
-
-  const handleProductOnlyConfirmNo = () => {
-    setShowProductOnlyConfirm(false);
-    // El reset se hace automáticamente después de 2 segundos
-    setTimeout(() => {
-      resetSaleState(); // Reset después de no imprimir
-      onClose(); // Cerrar el modal padre
-    }, 100);
-  };
-
-  const printOptions = {
-    contentRef: receiptRef,
-    onBeforeGetContent: () => {
-      return new Promise<void>((resolve) => {
-        setTimeout(resolve, 500);
-      });
-    },
-    onAfterPrint: () => {
-      setOrderId(null); // Limpiar orderId después de imprimir
-      setOrderNumber(null); // Limpiar orderNumber después de imprimir
-      onClose();
-    },
-    removeAfterPrint: true,
-  } as const;
-  const handlePrint = useReactToPrint(printOptions);
+    console.log("✅ Estado de venta reseteado completamente");
+  }, []);
 
   useEffect(() => {
     if (showPdfPreview) {
@@ -342,6 +314,17 @@ export function SaleForm({
       }
     }
   }, [showPdfPreview, selectedItems, orderNumber, orderId]);
+
+  // ✅ Limpiar estado cuando se abre una nueva venta
+  useEffect(() => {
+    if (isOpen) {
+      console.log("🚪 Nueva venta abierta - limpiando estado anterior");
+      resetSaleState();
+      setShowPdfPreview(false);
+      setShowUploadError(false);
+    }
+  }, [isOpen, resetSaleState]);
+
 
   const filteredItems = (): (Product | Service)[] => {
     if (!searchTerm.trim()) return [];
@@ -582,60 +565,6 @@ export function SaleForm({
     });
   };
 
-  // Reset completo del estado de la venta
-  const resetSaleState = () => {
-    console.log("🧹 Iniciando reset del estado de venta");
-
-    setSelectedItems([]); // Limpiar el carrito
-    setCustomerData({
-      name: "",
-      phone: "",
-      documentNumber: "",
-      email: "",
-      address: "",
-      ruc: "",
-      notes: "",
-    });
-    setErrors({}); // Limpiar errores de validación
-    setSearchTerm(""); // Limpiar búsqueda
-    setIsDropdownOpen(false); // Cerrar dropdown
-    setUploadStatus({
-      inProgress: false,
-      progress: 0,
-      error: null,
-      uploadedFiles: [],
-      failedFiles: [],
-    });
-    setShowPdfPreview(false); // Cerrar vista previa del PDF
-    setShowUploadError(false);
-    setForceSubmit(false);
-    setOrderId(null);
-    setOrderNumber(null);
-    // Reset newItem form
-    setNewItem({
-      id: "",
-      type: "",
-      name: "",
-      price: "",
-      quantity: "1",
-      notes: "",
-      images: [],
-      serviceType: "REPAIR",
-    });
-
-    // Solo cerrar el modal de confirmación si no está siendo usado
-    if (!showProductOnlyConfirm) {
-      setShowProductOnlyConfirm(false);
-    }
-
-    // Solo cerrar el PDF preview si no está siendo usado
-    if (!showPdfPreview) {
-      setShowPdfPreview(false);
-    }
-
-    console.log("✅ Estado de venta reseteado completamente");
-  };
-
   // Datos por defecto del cliente para ventas solo con productos
   const defaultClientInfo = {
     name: "venta",
@@ -768,30 +697,16 @@ export function SaleForm({
 
         if (hasServices) {
           // Si hay servicios: mostrar vista previa PDF directamente
-          setTimeout(() => {
-            console.log("📋 Mostrando vista previa PDF con delay para asegurar datos");
-            setShowPdfPreview(true);
-          }, 100);
+          console.log("📋 Mostrando vista previa PDF con delay para asegurar datos");
+          setShowPdfPreview(true);
         } else {
           // Si NO hay servicios (solo productos): también mostrar vista previa PDF
-          setTimeout(() => {
-            console.log("📋 Mostrando vista previa PDF para productos con delay para asegurar datos");
-            setShowPdfPreview(true);
-          }, 100);
+          console.log("📋 Mostrando vista previa PDF para productos con delay para asegurar datos");
+          setShowPdfPreview(true);
         }
 
-        // Reset automático después de completar la venta exitosamente
-        // Solo si NO hay servicios (porque para productos se muestra modal de confirmación)
-        if (hasServices) {
-          setTimeout(() => {
-            console.log("🔄 Reseteando formulario después de venta exitosa (con servicios)");
-            resetSaleState();
-            console.log("✅ Formulario reseteado automáticamente");
-          }, 2000);
-        } else {
-          // Para productos, NO hacer reset automático aquí - se hace en las funciones del modal
-          console.log("📋 Modal de confirmación se mostrará para productos - reset se hará después");
-        }
+        // ✅ El formulario se mantiene intacto hasta que el usuario cierre el PDF
+        console.log("📋 PDF preview se mostrará - el usuario decidirá cuándo cerrar");
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
@@ -1261,11 +1176,9 @@ const styles = StyleSheet.create({
         {/* Diálogo de vista previa del PDF */}
         <Dialog open={showPdfPreview} onOpenChange={(open) => {
           if (!open) {
+            console.log("🚫 Usuario cerró PDF (click fuera/Escape) - cerrando modal padre");
             setShowPdfPreview(false);
-            // Solo cerrar el modal padre si realmente se completó la operación
-            if (!selectedItems.length) {
-              onClose();
-            }
+            onClose(); // Cerrar el modal padre sin reset
           }
         }}>
           <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
@@ -1405,149 +1318,18 @@ const styles = StyleSheet.create({
                 </div>
               )}
             </div>
-            <div className="p-3 border-t flex justify-between bg-gray-50">
+            <div className="p-3 border-t flex justify-center bg-gray-50">
               <Button
                 variant="outline"
                 onClick={() => {
+                  console.log("🚫 Usuario cerró PDF - reseteando formulario y cerrando modal padre");
+                  resetSaleState(); // Reset completo cuando el usuario cierra el PDF
                   setShowPdfPreview(false);
-                  // Para ventas solo con productos, mostrar modal de confirmación
-                  const hasServices = selectedItems.some(item => item.type === 'service');
-                  if (!hasServices) {
-                    setShowProductOnlyConfirm(true);
-                  }
-                  // El reset se hace automáticamente después de 2 segundos
-                  onClose();
+                  onClose(); // Cerrar el modal padre
                 }}
                 className="px-6 py-2 text-base"
               >
                 Cerrar
-              </Button>
-              <Button
-                onClick={() => {
-                  // Imprimir directamente desde el PDFViewer
-                  window.print();
-                  setShowPdfPreview(false);
-                  setTimeout(() => {
-                    handlePrint(); // También usar el contenido HTML como respaldo
-                    // Para ventas solo con productos, mostrar modal de confirmación después de imprimir
-                    const hasServices = selectedItems.some(item => item.type === 'service');
-                    if (!hasServices) {
-                      setTimeout(() => {
-                        setShowProductOnlyConfirm(true);
-                      }, 100);
-                    }
-                    // El reset se hace automáticamente después de 2 segundos
-                    onClose();
-                  }, 100);
-                }}
-                className="px-6 py-2 text-base gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Imprimir PDF
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* ✅ Diálogo de confirmación de impresión */}
-        <Dialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Confirmar Impresión
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm text-muted-foreground">
-                ¿Desea imprimir el recibo de la venta?
-              </p>
-              <div className="mt-4 p-3 bg-muted/50 rounded-md">
-                <p className="text-xs text-muted-foreground mb-2">
-                  <strong>Resumen de la venta:</strong>
-                </p>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span>Productos:</span>
-                    <span>{selectedItems.filter(item => item.type === 'product').length}</span>
-                  </div>
-                  {selectedItems.some(item => item.type === 'service') && (
-                    <div className="flex justify-between">
-                      <span>Servicios:</span>
-                      <span>{selectedItems.filter(item => item.type === 'service').length}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium border-t pt-1">
-                    <span>Total:</span>
-                    <span>
-                      S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={handlePrintCancel}>
-                No imprimir
-              </Button>
-              <Button onClick={handlePrintConfirm} className="gap-2">
-                <FileText className="h-4 w-4" />
-                Sí, imprimir
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* ✅ Diálogo de confirmación para ventas solo con productos */}
-        <Dialog open={showProductOnlyConfirm} onOpenChange={setShowProductOnlyConfirm}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Confirmar Impresión de Nota de Venta
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm text-muted-foreground mb-4">
-                La venta ha sido registrada exitosamente. ¿Desea imprimir la nota de venta?
-              </p>
-              {(() => {
-                console.log("💬 Modal de confirmación - Estado orderNumber:", orderNumber);
-                console.log("💬 Modal de confirmación - Estado selectedItems:", selectedItems.length);
-                return (
-                  <div className="p-3 bg-muted/50 rounded-md">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      <strong>Detalles de la venta:</strong>
-                    </p>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span>Productos:</span>
-                        <span>{selectedItems.filter(item => item.type === 'product').length}</span>
-                      </div>
-                      <div className="flex justify-between font-medium border-t pt-1">
-                        <span>Total:</span>
-                        <span>
-                          S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
-                        </span>
-                      </div>
-                      {orderNumber && (
-                        <div className="flex justify-between font-medium pt-1">
-                          <span>Número de Orden:</span>
-                          <span>{orderNumber}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={handleProductOnlyConfirmNo}>
-                No imprimir
-              </Button>
-              <Button onClick={handleProductOnlyConfirmYes} className="gap-2">
-                <FileText className="h-4 w-4" />
-                Sí, imprimir
               </Button>
             </div>
           </DialogContent>

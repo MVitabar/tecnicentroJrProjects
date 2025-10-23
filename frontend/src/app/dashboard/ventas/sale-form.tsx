@@ -66,7 +66,7 @@ export default function VentasPage() {
     setIsFormOpen(false);
   };
 
-  const handleCreateSale = async (saleData: SaleData): Promise<boolean> => {
+  const handleCreateSale = async (saleData: SaleData): Promise<{ success: boolean; orderId?: string; orderNumber?: string; }> => {
     try {
       const clientInfo: ClientInfo = {
         name: saleData.customer?.name || 'Cliente no especificado',
@@ -75,7 +75,7 @@ export default function VentasPage() {
         dni: saleData.customer?.dni || '',
         address: saleData.customer?.address
       };
-      
+
       // Create products array with proper typing
       const products: SaleProduct[] = (saleData.items || []).map(item => ({
         productId: item.product.id,
@@ -89,16 +89,22 @@ export default function VentasPage() {
         products,
         services: [] // Add services if needed
       };
-      
+
       const newSale = await createSale(saleDto);
       setSales(prevSales => [newSale, ...prevSales]);
       toast.success("Venta registrada exitosamente");
       setIsFormOpen(false);
-      return true;
+      return {
+        success: true,
+        orderId: newSale.id,
+        orderNumber: newSale.orderNumber // Ahora disponible en el tipo SaleResponse
+      };
     } catch (error) {
       console.error("Error al crear la venta:", error);
       toast.error("Error al registrar la venta");
-      return false;
+      return {
+        success: false
+      };
     }
   };
 

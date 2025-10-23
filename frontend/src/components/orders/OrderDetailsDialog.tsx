@@ -225,9 +225,8 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                           )}
                           <div className="mt-2">
                             <Badge variant="outline" className="mr-2">
-                              {service.type === 'REPAIR' ? 'Reparación' : 
-                               service.type === 'MAINTENANCE' ? 'Mantenimiento' :
-                               service.type === 'DIAGNOSTIC' ? 'Diagnóstico' : 'Otro'}
+                              {service.type === 'REPAIR' ? 'Reparación' :
+                               service.type === 'WARRANTY' ? 'Garantía' : 'Otro'}
                             </Badge>
                             <Badge variant="secondary">
                               S/{service.price.toFixed(2)}

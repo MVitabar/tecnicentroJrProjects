@@ -28,23 +28,23 @@ export function MainLayout({ children }: MainLayoutProps) {
     const checkAuth = async () => {
       setIsClient(true);
       
-      // Wait for auth state to be fully loaded
+      // Esperar a que el estado de autenticación se cargue completamente
       if (loading) {
         return;
       }
 
-      // If not authenticated and not on a public route, redirect to login
+      // Si no está autenticado y no está en una ruta pública, redirigir al login
       if (!isAuthenticated && !isPublicRoute) {
-        console.log('Not authenticated, redirecting to login');
+        console.log('No autenticado, redirigiendo al login');
         router.push("/login");
         return;
       }
 
-      // If authenticated, check user permissions
+      // Si está autenticado, verificar permisos del usuario
       if (isAuthenticated) {
         const user = authService.getCurrentUser();
         if (!user) {
-          console.log('No user found in localStorage, redirecting to login');
+          console.log('Usuario no encontrado en localStorage, redirigiendo al login');
           router.push("/login");
           return;
         }
@@ -52,34 +52,34 @@ export function MainLayout({ children }: MainLayoutProps) {
         const userRole = user.role || 'USER';
         const userRoutes = ["/dashboard/ventas", "/dashboard/servicios", "/dashboard/productos", "/dashboard/clientes"];
         
-        // Redirect USER role from dashboard root to ventas
+        // Redirigir rol USER desde dashboard raíz a ventas
         if (userRole === 'USER' && pathname === '/dashboard') {
-          console.log('User role detected, redirecting to ventas');
+          console.log('Rol de usuario detectado, redirigiendo a ventas');
           router.push('/dashboard/ventas');
           return;
         }
         
-        // Check if current route is allowed for USER role
+        // Verificar si la ruta actual está permitida para el rol USER
         const isUserRoute = userRoutes.some(route => 
           pathname === route || pathname.startsWith(`${route}/`)
         );
         
         if (userRole === 'USER' && !isUserRoute && !isPublicRoute) {
-          console.log('User not authorized for this route, redirecting to ventas');
+          console.log('Usuario no autorizado para esta ruta, redirigiendo a ventas');
           router.push('/dashboard/ventas');
           return;
         }
       }
       
-      // If we get here, auth check is complete
-      console.log('Auth check complete');
+      // Si llegamos aquí, la verificación de autenticación está completa
+      console.log('Autenticación verificada con éxito');
       setAuthChecked(true);
     };
 
     checkAuth();
   }, [pathname, isAuthenticated, isPublicRoute, loading, router]);
 
-  // Show loading spinner while checking auth
+  // Mostrar spinner de carga mientras se verifica la autenticación
   if (!isClient || loading || !authChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -88,12 +88,12 @@ export function MainLayout({ children }: MainLayoutProps) {
     );
   }
 
-  // Handle public routes
+  // Manejar rutas públicas
   if (isPublicRoute) {
     return <div className="min-h-screen bg-background">{children}</div>;
   }
 
-  // Main authenticated layout
+  // Layout principal autenticado
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />

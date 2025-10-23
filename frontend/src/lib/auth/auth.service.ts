@@ -1,4 +1,4 @@
-import api from '@/lib/api/client';
+import { getApiBaseUrl, api } from '@/services/api';
 
 declare global {
   interface Window {
@@ -31,12 +31,12 @@ interface RefreshTokenResponse {
   expiresIn: number;
 }
 
-// Export the auth service as default
+// Exportar el servicio de autenticación como predeterminado
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('Iniciando login con credenciales:', { email: credentials.email });
     
-    // Clear any existing auth headers
+    // Limpiar headers de autenticación existentes
     delete api.defaults.headers.common['Authorization'];
     
     const response = await api.post<AuthResponse>('/auth/login', credentials, {
@@ -50,24 +50,24 @@ export const authService = {
     console.log('Respuesta completa del servidor:', JSON.stringify(data, null, 2));
     
     if (!data.access_token) {
-      console.error('No access token received in login response');
+      console.error('No se recibió token de acceso en la respuesta de login');
       throw new Error('No se recibió un token de acceso en la respuesta');
     }
     
     if (!data.user) {
-      console.warn('No user data received in login response');
+      console.warn('No se recibieron datos del usuario en la respuesta de login');
       throw new Error('No se recibieron los datos del usuario en la respuesta');
     }
     
-    // Ensure the role is properly set from the API response
+    // Asegurar que el rol esté configurado correctamente desde la respuesta de la API
     if (!data.user.role) {
-      console.warn('No role received in user data, defaulting to USER');
+      console.warn('No se recibió rol en los datos del usuario, usando USER por defecto');
       data.user.role = 'USER';
     } else {
       console.log('Role recibido del servidor:', data.user.role);
     }
     
-    // Store tokens and user data
+    // Almacenar tokens y datos del usuario
     this.setSession(data);
     
     return data;
@@ -78,13 +78,13 @@ export const authService = {
 
     const { access_token, refresh_token, user } = authResult;
     
-    // Store tokens and user data
+    // Almacenar tokens y datos del usuario
     localStorage.setItem('auth_token', access_token);
     if (refresh_token) {
       localStorage.setItem('refresh_token', refresh_token);
     }
     
-    // Normalize user role
+    // Normalizar rol del usuario
     const userWithRole = {
       ...user,
       role: this.normalizeRole(user.role)
@@ -92,14 +92,14 @@ export const authService = {
     
     localStorage.setItem('user', JSON.stringify(userWithRole));
     
-    // Set default auth header for all future requests
+    // Establecer header de autenticación por defecto para todas las solicitudes futuras
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
     
-    // Set the time that the access token will expire at (with 5 minutes buffer)
-    const expiresAt = Date.now() + ((authResult.expires_in - 300) * 1000); // 5 minutes before actual expiration
+    // Establecer el tiempo en que expirará el token de acceso (con buffer de 5 minutos)
+    const expiresAt = Date.now() + ((authResult.expires_in - 300) * 1000); // 5 minutos antes de la expiración real
     localStorage.setItem('expires_at', expiresAt.toString());
     
-    // Schedule token refresh
+    // Programar renovación de token
     
     console.log('Sesión establecida correctamente');
     
@@ -181,7 +181,7 @@ export const authService = {
     return !!token && !this.isTokenExpired();
   },
 
-  // Helper to normalize role format
+  // Función auxiliar para normalizar formato de rol
   normalizeRole(role?: string): string {
     if (!role) return 'User';
     const lowerRole = role.toLowerCase();
@@ -189,7 +189,7 @@ export const authService = {
     return 'User';
   },
 
-  // Get current user from localStorage
+  // Obtener usuario actual del localStorage
   getCurrentUser() {
     if (typeof window === 'undefined') return null;
     const userStr = localStorage.getItem('user');
@@ -231,7 +231,7 @@ export const authService = {
       window.isRefreshing = true;
       
       // Usar fetch directamente para evitar problemas con el interceptor
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/auth/refresh`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -240,7 +240,7 @@ export const authService = {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to refresh token');
+        throw new Error('Error al renovar token');
       }
 
       const data = await response.json();
@@ -267,7 +267,7 @@ export const authService = {
         expiresIn: data.expires_in
       };
     } catch (error) {
-      console.error('Error refreshing token:', error);
+      console.error('Error al renovar token:', error);
       this.logout();
       return null;
     } finally {
@@ -275,7 +275,7 @@ export const authService = {
     }
   },
   
-  // Get current user from localStorage
+  // Obtener usuario actual del localStorage
   
 
 };

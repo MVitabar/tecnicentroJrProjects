@@ -1,27 +1,7 @@
 // src/services/dashboard.service.ts
-import axios from 'axios';
+import { api } from '@/services/api';
 
-// Define API base URL from environment variables
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-
-// Create axios instance
-const api = axios.create({
-  baseURL: API_URL,
-  withCredentials: true,
-});
-
-// Add request interceptor to include auth token
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem(process.env.NEXT_PUBLIC_TOKEN_KEY || 'auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
-});
-
-// Define types for API responses
+// Definir tipos para respuestas de API
 interface Order {
   id: string;
   totalAmount: number;
@@ -147,14 +127,14 @@ export interface DashboardStats {
 export const dashboardService = {
   // Función de prueba para verificar endpoints individuales
   async testEndpoints() {
-    console.log('=== TESTING ENDPOINTS ===');
+    console.log('=== PROBANDO ENDPOINTS ===');
 
     try {
       const clientsRes = await api.get('/clientes');
       console.log('✅ /clientes:', clientsRes.status, clientsRes.data?.length || 0, 'items');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /clientes failed:', error.response?.status, error.message);
+      console.error('❌ /clientes falló:', error.response?.status, error.message);
     }
 
     try {
@@ -162,7 +142,7 @@ export const dashboardService = {
       console.log('✅ /products/all:', productsRes.status, productsRes.data?.data?.length || 0, 'items');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /products/all failed:', error.response?.status, error.message);
+      console.error('❌ /products/all falló:', error.response?.status, error.message);
     }
 
     try {
@@ -170,7 +150,7 @@ export const dashboardService = {
       console.log('✅ /services/findAll:', servicesRes.status, servicesRes.data?.length || 0, 'items');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /services/findAll failed:', error.response?.status, error.message);
+      console.error('❌ /services/findAll falló:', error.response?.status, error.message);
     }
 
     try {
@@ -178,15 +158,15 @@ export const dashboardService = {
       console.log('✅ /orders/all:', ordersRes.status, ordersRes.data?.length || 0, 'items');
     } catch (err: unknown) {
       const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /orders/all failed:', error.response?.status, error.message);
+      console.error('❌ /orders/all falló:', error.response?.status, error.message);
     }
   },
 
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      console.log('Fetching dashboard data...');
+      console.log('Obteniendo datos del dashboard...');
 
-      // Fetch data in parallel
+      // Obtener datos en paralelo
       const [ordersRes, clientsRes, productsRes, servicesRes] = await Promise.all([
         api.get('/orders/all').catch(() => ({ data: [] })),
         api.get('/clientes').catch(() => ({ data: { data: [] } })),
@@ -194,12 +174,12 @@ export const dashboardService = {
         api.get('/services/findAll').catch(() => ({ data: [] })) // ✅ Corregido: usar /services/findAll
       ]);
 
-      // Extract data correctly based on response structure
+      // Extraer datos correctamente basado en la estructura de respuesta
       const orders: Order[] = ordersRes.data || [];
       const products: Product[] = productsRes.data || [];
       const services: Service[] = servicesRes.data || [];
 
-      // Handle clients data more carefully
+      // Manejar datos de clientes con más cuidado
       let clients: Client[] = [];
       if (clientsRes.data) {
         if (Array.isArray(clientsRes.data.data)) {
@@ -207,7 +187,7 @@ export const dashboardService = {
         } else if (Array.isArray(clientsRes.data)) {
           clients = clientsRes.data;
         } else if (clientsRes.data && typeof clientsRes.data === 'object') {
-          // If it's an object, try to find the array in common properties
+          // Si es un objeto, intentar encontrar el array en propiedades comunes
           if (Array.isArray(clientsRes.data.items)) {
             clients = clientsRes.data.items;
           } else if (Array.isArray(clientsRes.data.data)) {
@@ -327,22 +307,22 @@ export const dashboardService = {
       const productsData = products.length > 0 ? products : fallbackProducts;
       const servicesData = services.length > 0 ? services : fallbackServices;
 
-      // Calculate sales summary (only for completed orders)
+      // Calcular resumen de ventas (solo para órdenes completadas)
       const completedOrders = ordersData.filter((order: Order) => order.status === 'COMPLETED');
 
       const salesTotal = completedOrders.reduce((sum: number, order: Order) => {
-        // Usar el totalAmount que ya viene calculado del backend
+        // Sumar el monto total de cada orden
         return sum + (order.totalAmount || 0);
       }, 0);
 
       const salesCount = completedOrders.length;
       const salesAverage = salesCount > 0 ? salesTotal / salesCount : 0;
 
-      // Calculate products summary
+      // Calcular resumen de productos
       const lowStockThreshold = 10;
       const lowStockCount = productsData.filter((p: Product) => p.stock <= lowStockThreshold).length;
 
-      // Calculate clients summary
+      // Calcular resumen de clientes
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       const newClientsThisMonth = clients.filter((client: Client) => {
@@ -350,17 +330,17 @@ export const dashboardService = {
         return clientDate.getMonth() === currentMonth && clientDate.getFullYear() === currentYear;
       }).length;
 
-      // Get recent sales (last 5)
+      // Obtener ventas recientes (últimas 5)
       const recentSales = ordersData
         .sort((a: Order, b: Order) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 5);
 
-      // Get top products (by stock)
+      // Obtener productos principales (por stock)
       const topProducts = productsData
         .sort((a: Product, b: Product) => b.stock - a.stock)
         .slice(0, 5);
 
-      // Get most popular service
+      // Obtener servicio más popular
       const mostPopularService = servicesData[0]?.name || 'Ninguno';
 
       return {
@@ -408,7 +388,7 @@ export const dashboardService = {
         })),
       };
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error al obtener datos del dashboard:', error);
       throw new Error('No se pudieron cargar los datos del dashboard');
     }
   },

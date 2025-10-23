@@ -14,11 +14,27 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **Note:** The frontend runs on port 3001 and connects to the backend API on port 3000.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Configuration
+
+### Ports
+- **Frontend (Next.js):** Port 3001
+- **Backend API:** Port 3000
+
+The frontend application connects to the backend API running on port 3000. Make sure both services are running simultaneously for the application to work properly.
+
+### Environment Variables
+You can override the API URL by setting the `NEXT_PUBLIC_API_URL` environment variable:
+
+```bash
+# Example: Connect to a different backend
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```
 
 ## Learn More
 

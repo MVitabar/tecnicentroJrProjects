@@ -23,11 +23,11 @@ export interface ServiceOrderItem {
 }
 
 export interface ClientInfo {
-  name: string;
+  name?: string;
   email?: string;  // Made optional to match backend
   phone?: string;  // Made optional to match backend
   address?: string;
-  dni?: string;
+  dni: string;
   ruc?: string;  // Added to match backend specification
   notes?: string;
 }
@@ -52,11 +52,11 @@ export interface CreateOrderDto {
 export interface SaleData {
   // New structure matching backend specification
   clientInfo?: {
-    name: string;
+    name?: string;
     email?: string;
     phone?: string;
     address?: string;
-    dni?: string;
+    dni: string;
     ruc?: string;
   };
   products?: Array<{
@@ -91,7 +91,14 @@ export interface SaleData {
 
 // Type guard to check if the data is in the new format
 export const isNewSaleData = (data: SaleData): data is Required<Pick<SaleData, 'products' | 'services'>> & {
-  clientInfo?: ClientInfo;
+  clientInfo?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    dni: string;
+    ruc?: string;
+  };
   paymentMethod?: string;
   total?: number;
   status?: string;

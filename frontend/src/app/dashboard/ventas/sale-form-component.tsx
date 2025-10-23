@@ -209,7 +209,6 @@ export function SaleForm({
   });
 
   const [errors, setErrors] = useState<{
-    name?: string;
     email?: string;
     phone?: string;
     documentNumber?: string;
@@ -224,23 +223,14 @@ export function SaleForm({
 
     // Solo validar los campos del cliente si hay servicios
     if (hasServices) {
-      if (!customerData.name?.trim()) {
-        newErrors.name = "El nombre es obligatorio";
-        isValid = false;
-      }
-
-      if (!customerData.email?.trim()) {
-        newErrors.email = "El correo electrónico es obligatorio";
-        isValid = false;
-      } else if (!/\S+@\S+\.\S+/.test(customerData.email)) {
+      // Validar formato de email si tiene contenido
+      if (customerData.email?.trim() && !/\S+@\S+\.\S+/.test(customerData.email)) {
         newErrors.email = "El correo electrónico no es válido";
         isValid = false;
       }
 
-      if (!customerData.phone?.trim()) {
-        newErrors.phone = "El teléfono es obligatorio";
-        isValid = false;
-      } else if (!/^[0-9+\-\s]+$/.test(customerData.phone)) {
+      // Validar formato de teléfono si tiene contenido
+      if (customerData.phone?.trim() && !/^[0-9+\-\s]+$/.test(customerData.phone)) {
         newErrors.phone =
           "El teléfono solo puede contener números, guiones y espacios";
         isValid = false;
@@ -730,31 +720,21 @@ export function SaleForm({
         <div className="space-y-2">
           <Label htmlFor="name" className="text-foreground/90">
             Nombre completo
-            {selectedItems.some((item) => item.type === "service") && (
-              <span className="text-destructive ml-1">*</span>
-            )}
           </Label>
           <Input
             id="name"
             value={customerData.name}
             onChange={(e) => {
               setCustomerData({ ...customerData, name: e.target.value });
-              if (errors.name) setErrors({ ...errors, name: undefined });
             }}
             placeholder="Nombre del cliente"
-            className={`mt-1 ${errors.name ? "border-destructive" : ""}`}
+            className="mt-1"
           />
-          {errors.name && (
-            <p className="text-sm text-destructive mt-1.5">{errors.name}</p>
-          )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="email" className="text-foreground/90">
             Correo electrónico
-            {selectedItems.some((item) => item.type === "service") && (
-              <span className="text-destructive ml-1">*</span>
-            )}
           </Label>
           <Input
             id="email"
@@ -765,7 +745,7 @@ export function SaleForm({
               if (errors.email) setErrors({ ...errors, email: undefined });
             }}
             placeholder="correo@ejemplo.com"
-            className={`mt-1 ${errors.email ? "border-destructive" : ""}`}
+            className="mt-1"
           />
           {errors.email && (
             <p className="text-sm text-destructive mt-1.5">{errors.email}</p>
@@ -775,9 +755,6 @@ export function SaleForm({
         <div className="space-y-2">
           <Label htmlFor="phone" className="text-foreground/90">
             Teléfono
-            {selectedItems.some((item) => item.type === "service") && (
-              <span className="text-destructive ml-1">*</span>
-            )}
           </Label>
           <Input
             id="phone"
@@ -788,7 +765,7 @@ export function SaleForm({
               if (errors.phone) setErrors({ ...errors, phone: undefined });
             }}
             placeholder="+51 999 999 999"
-            className={`mt-1 ${errors.phone ? "border-destructive" : ""}`}
+            className="mt-1"
           />
           {errors.phone && (
             <p className="text-sm text-destructive mt-1.5">{errors.phone}</p>
@@ -869,9 +846,8 @@ export function SaleForm({
           <p className="text-sm text-muted-foreground flex items-center">
             <Info className="h-4 w-4 mr-2 flex-shrink-0" />
             <span>
-              Los campos marcados con{" "}
-              <span className="text-destructive">*</span> son obligatorios
-              cuando se incluyen servicios.
+              Solo el DNI es obligatorio cuando se incluyen servicios.
+              Los campos de email y teléfono son opcionales pero se validan si se completan.
             </span>
           </p>
         </div>

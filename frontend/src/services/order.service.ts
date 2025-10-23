@@ -87,11 +87,11 @@ export const orderService = {
   async createOrder(orderData: {
     clientId?: string;
     clientInfo?: {
-      name: string;
+      name?: string;
       email?: string;
       phone?: string;
       address?: string;
-      dni?: string;
+      dni: string;
       ruc?: string;
     };
     products?: Array<{
@@ -125,11 +125,11 @@ export const orderService = {
       const orderDataToSend = {
         ...(orderData.clientInfo && {
           clientInfo: {
-            name: orderData.clientInfo.name,
+            name: orderData.clientInfo.name || 'Cliente Ocasional',
             ...(orderData.clientInfo.email && { email: orderData.clientInfo.email }),
             ...(orderData.clientInfo.phone && { phone: orderData.clientInfo.phone }),
             ...(orderData.clientInfo.address && { address: orderData.clientInfo.address }),
-            ...(orderData.clientInfo.dni && { dni: orderData.clientInfo.dni }),
+            dni: orderData.clientInfo.dni,
             ...(orderData.clientInfo.ruc && { ruc: orderData.clientInfo.ruc })
           }
         }),

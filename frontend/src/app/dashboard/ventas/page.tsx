@@ -138,11 +138,11 @@ export default function VentasPage() {
       // Transformar los datos al formato esperado por el backend
       const orderDataForBackend: {
         clientInfo?: {
-          name: string;
+          name?: string;
           email?: string;
           phone?: string;
           address?: string;
-          dni?: string;
+          dni: string;
           ruc?: string;
         };
         products?: Array<{
@@ -163,7 +163,7 @@ export default function VentasPage() {
           ...(orderData.clientInfo?.email && { email: orderData.clientInfo.email }),
           ...(orderData.clientInfo?.phone && { phone: orderData.clientInfo.phone }),
           ...(orderData.clientInfo?.address && { address: orderData.clientInfo.address }),
-          ...(orderData.clientInfo?.dni && { dni: orderData.clientInfo.dni }),
+          dni: orderData.clientInfo?.dni || '11111111',
           ...(orderData.clientInfo?.ruc && { ruc: orderData.clientInfo.ruc })
         },
         status: 'PENDING' as const
@@ -536,6 +536,10 @@ export default function VentasPage() {
         onSubmit={async (data) => {
           const transformedData: SaleData = {
             ...data,
+            clientInfo: data.clientInfo ? {
+              ...data.clientInfo,
+              dni: data.clientInfo.dni || '11111111'
+            } : undefined,
             products: data.products.map(p => ({
               ...p,
             }))

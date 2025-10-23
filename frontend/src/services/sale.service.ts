@@ -2,11 +2,11 @@
 import { api } from './api';
 
 export interface ClientInfo {
-  name: string;
+  name?: string;
   email?: string;
   phone?: string;
   address?: string;
-  dni?: string;
+  dni: string;
 }
 
 export interface SaleProduct {

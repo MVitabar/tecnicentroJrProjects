@@ -15,6 +15,23 @@ import { Edit, Trash2, Users as UsersIcon, ChevronLeft, ChevronRight, X } from "
 import { toast } from "sonner";
 import { UserDialog } from "./user-dialog";
 
+/**
+ * SISTEMA DE DESACTIVACIÓN DE USUARIOS (SOLO FRONTEND)
+ *
+ * Este componente implementa un sistema de "eliminación suave" donde:
+ * - Los usuarios se "desactivan" en lugar de eliminarse físicamente
+ * - La lista de usuarios desactivados se guarda en localStorage
+ * - Solo se muestran usuarios activos (no en la lista de desactivados)
+ * - La desactivación es permanente pero reversible editando localStorage
+ * - No requiere cambios en el backend
+ *
+ * Flujo:
+ * 1. Se cargan todos los usuarios del backend
+ * 2. Se filtran los usuarios desactivados usando localStorage
+ * 3. Se aplica búsqueda adicional si hay searchTerm
+ * 4. Se muestra la lista filtrada de usuarios activos
+ */
+
 type User = {
   id: string;
   name: string;
@@ -22,24 +39,22 @@ type User = {
   username: string;
   phone: string;
   role: "ADMIN" | "USER";
+  status?: "ACTIVE" | "INACTIVE";
   createdAt: string;
   updatedAt: string;
 };
 
 interface UserTableProps {
   searchTerm?: string;
-  roleFilter?: string;
   onSearchChange?: (search: string) => void;
-  onRoleFilterChange?: (role: string) => void;
 }
 
-export function UserTable({ 
-  searchTerm = '', 
-  roleFilter = 'all',
-  onSearchChange,
-  onRoleFilterChange 
+export function UserTable({
+  searchTerm = '',
+  onSearchChange
 }: UserTableProps) {
   const [users, setUsers] = useState<User[]>([]);
+  const [disabledUsers, setDisabledUsers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -58,28 +73,32 @@ export function UserTable({
     await fetchUsers(); // Refresh the user list
   };
 
+  // Cargar usuarios desactivados desde localStorage
+  useEffect(() => {
+    const savedDisabledUsers = localStorage.getItem('disabledUsers');
+    if (savedDisabledUsers) {
+      setDisabledUsers(JSON.parse(savedDisabledUsers));
+    }
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem(
         process.env.NEXT_PUBLIC_TOKEN_KEY || "auth_token"
       );
-      
+
       let url = `${process.env.NEXT_PUBLIC_API_URL}/users`;
       const params = new URLSearchParams();
-      
+
       if (searchTerm) {
         params.append('search', searchTerm);
       }
-      
-      if (roleFilter && roleFilter !== 'all') {
-        params.append('role', roleFilter);
-      }
-      
+
       if (params.toString()) {
         url += `?${params.toString()}`;
       }
-      
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -95,9 +114,45 @@ export function UserTable({
       }
 
       const data = await response.json();
-      setUsers(data.items || data); // Handle both paginated and non-paginated responses
+      const allUsers = data.items || data; // Handle both paginated and non-paginated responses
+
+      console.log('📊 Usuarios del backend:', allUsers.length);
+      console.log('🔍 Search term:', searchTerm);
+      console.log('🚫 Usuarios desactivados:', disabledUsers.length);
+
+      // Filtrado inteligente por palabras - solo usuarios activos (no desactivados)
+      let filteredUsers = allUsers;
+
+      // Filtrar usuarios desactivados del frontend
+      filteredUsers = allUsers.filter((user: User) => !disabledUsers.includes(user.id));
+
+      console.log('📋 Usuarios activos después del filtro:', filteredUsers.length);
+
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const searchWords = searchLower.split(' ').filter(word => word.length > 0);
+
+        filteredUsers = filteredUsers.filter((user: User) => {
+          const searchableText = [
+            user.name,
+            user.email,
+            user.phone || '',
+            user.username || ''
+          ].join(' ').toLowerCase();
+
+          // Buscar si todas las palabras del searchTerm están presentes
+          return searchWords.every(word =>
+            searchableText.includes(word)
+          );
+        });
+
+        console.log('🎯 Usuarios filtrados:', filteredUsers.length);
+        console.log('📝 Usuarios filtrados:', filteredUsers.map((u: User) => ({ name: u.name, email: u.email })));
+      }
+
+      setUsers(filteredUsers);
       setError(null);
-      setCurrentPage(1); // Reset to first page on new search/filter
+      setCurrentPage(1); // Reset to first page on new search
     } catch (err) {
       console.error("Error al cargar usuarios:", err);
       const errorMessage = err instanceof Error ? err.message : "Ocurrió un error inesperado";
@@ -106,7 +161,7 @@ export function UserTable({
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm, roleFilter]);
+  }, [searchTerm, disabledUsers]);
 
   useEffect(() => {
     fetchUsers();
@@ -136,37 +191,27 @@ export function UserTable({
 
 
   const handleDelete = async (userId: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar este usuario?")) {
+    if (!confirm("¿Estás seguro de que deseas desactivar este usuario?\n\nEl usuario ya no aparecerá en la lista de usuarios activos, pero sus datos y ventas relacionadas se mantendrán intactos en el sistema.")) {
       return;
     }
 
     try {
-      const token = localStorage.getItem(
-        process.env.NEXT_PUBLIC_TOKEN_KEY || "auth_token"
-      );
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/users/${userId}`,
-        {
-          method: "DELETE",
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      // Agregar usuario a la lista de desactivados en localStorage
+      const newDisabledUsers = [...disabledUsers, userId];
+      setDisabledUsers(newDisabledUsers);
+      localStorage.setItem('disabledUsers', JSON.stringify(newDisabledUsers));
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "No se pudo eliminar el usuario");
-      }
+      // Actualizar la lista de usuarios activos inmediatamente
+      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
 
-      // Refresh the user list
-      await fetchUsers();
-      toast.success("¡Usuario eliminado correctamente!");
+      console.log('🚫 Usuario desactivado:', userId);
+      console.log('📊 Total usuarios desactivados:', newDisabledUsers.length);
+
+      toast.success("¡Usuario desactivado correctamente! El usuario ya no aparece en la lista de usuarios activos.");
     } catch (err) {
-      console.error("Error al eliminar usuario:", err);
-      const errorMessage = err instanceof Error ? err.message : "Error al eliminar el usuario";
-      toast.error(`Error al eliminar el usuario: ${errorMessage}`);
+      console.error("Error al desactivar usuario:", err);
+      const errorMessage = err instanceof Error ? err.message : "Error al desactivar el usuario";
+      toast.error(`Error al desactivar el usuario: ${errorMessage}`);
     }
   };
 
@@ -238,26 +283,25 @@ export function UserTable({
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
         <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-medium">
-          {searchTerm || roleFilter !== 'all' 
-            ? 'No se encontraron usuarios que coincidan con la búsqueda' 
-            : 'No hay usuarios registrados'}
+          {searchTerm
+            ? 'No se encontraron usuarios que coincidan con la búsqueda'
+            : 'No hay usuarios activos registrados'}
         </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          {searchTerm || roleFilter !== 'all'
-            ? 'Intenta con otros términos de búsqueda o ajusta los filtros.'
+          {searchTerm
+            ? `No se encontraron usuarios activos que contengan "${searchTerm}". Intenta con otros términos de búsqueda.`
             : 'Comienza agregando un nuevo usuario al sistema.'}
         </p>
         <div className="flex space-x-3">
-          {(searchTerm || roleFilter !== 'all') && (
-            <Button 
-              variant="outline" 
+          {searchTerm && (
+            <Button
+              variant="outline"
               onClick={() => {
                 if (onSearchChange) onSearchChange('');
-                if (onRoleFilterChange) onRoleFilterChange('all');
               }}
             >
               <X className="mr-2 h-4 w-4" />
-              Limpiar filtros
+              Limpiar búsqueda
             </Button>
           )}
         </div>
@@ -346,7 +390,7 @@ export function UserTable({
                     size="icon"
                     onClick={() => handleDelete(user.id)}
                     className="h-8 w-8 text-destructive hover:text-destructive/90 opacity-0 group-hover:opacity-100"
-                    title="Eliminar usuario"
+                    title="Desactivar usuario"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

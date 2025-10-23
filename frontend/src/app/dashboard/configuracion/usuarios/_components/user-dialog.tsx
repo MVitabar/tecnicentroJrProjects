@@ -53,6 +53,7 @@ export function UserDialog({
 
   // Map the user data to match the UserForm expected format
   const formInitialData = user ? {
+    id: user.id,  // ✅ Agregar el ID para que el UserForm sepa que está editando
     name: user.name,
     username: user.username || '',
     email: user.email,

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer } from "@react-pdf/renderer";
+import ReceiptPDF from './ReceiptPDF';
 import { Document, Page, View, Text, StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -115,6 +116,7 @@ export function SaleForm({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showServiceSheet, setShowServiceSheet] = useState(false); // Para la hoja de servicio
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -1067,6 +1069,56 @@ const styles = StyleSheet.create({
     footerText: "Gracias por su compra. Vuelva pronto.",
   };
 
+  // Generar datos para la hoja de servicio (ReceiptPDF)
+  const generateServiceSheetData = () => {
+    const items = selectedItems.map((item) => ({
+      name: item.name,
+      price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
+      quantity: item.quantity,
+      notes: item.notes || "",
+    }));
+
+    const subtotal = selectedItems.reduce(
+      (sum, item) => sum + (typeof item.price === "string" ? parseFloat(item.price) : item.price) * item.quantity,
+      0
+    );
+    const total = subtotal;
+
+    const hasServices = selectedItems.some((item) => item.type === "service");
+
+    const customerInfo = hasServices
+      ? {
+          name: customerData.name || "Cliente",
+          phone: customerData.phone || "123456789",
+          documentNumber: customerData.documentNumber || "11111111",
+          email: customerData.email || "cliente@cliente.com",
+          address: customerData.address || "Cliente",
+          documentType: "DNI"
+        }
+      : {
+          name: defaultClientInfo.name,
+          phone: defaultClientInfo.phone,
+          documentNumber: defaultClientInfo.dni,
+          email: defaultClientInfo.email,
+          address: defaultClientInfo.address,
+          documentType: "DNI"
+        };
+
+    return {
+      customerName: customerInfo.name,
+      customer: {
+        documentNumber: customerInfo.documentNumber,
+        documentType: customerInfo.documentType,
+        phone: customerInfo.phone,
+      },
+      items,
+      subtotal,
+      total,
+      orderId: orderId || undefined,
+      orderNumber: orderNumber || undefined,
+    };
+  };
+
   return (
     <div className={`fixed inset-0 bg-black/90 flex items-start md:items-center justify-center z-50 p-2 md:p-4 overflow-y-auto ${!isOpen ? 'hidden' : ''}`}>
       <div className="bg-background border border-muted rounded-3xl shadow-xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] flex flex-col">
@@ -1173,7 +1225,65 @@ const styles = StyleSheet.create({
           </div>
         </div>
 
-        {/* Diálogo de vista previa del PDF */}
+        {/* Diálogo de hoja de servicio */}
+        <Dialog open={showServiceSheet} onOpenChange={(open) => {
+          if (!open) {
+            setShowServiceSheet(false);
+          }
+        }}>
+          <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="px-6 pt-4 pb-2 border-b">
+              <DialogTitle className="text-2xl font-bold">
+                Hoja de Servicio - Vista Previa
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden p-0">
+              {showServiceSheet ? (
+                <PDFViewer
+                  width="100%"
+                  height="100%"
+                  style={{
+                    border: "none",
+                    minHeight: "calc(98vh - 120px)",
+                    backgroundColor: "white",
+                  }}
+                >
+                  <ReceiptPDF
+                    saleData={generateServiceSheetData()}
+                    businessInfo={businessInfo}
+                  />
+                </PDFViewer>
+              ) : (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  backgroundColor: "white",
+                  color: "#666"
+                }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 16, marginBottom: 10 }}>
+                      Hoja de Servicio
+                    </div>
+                    <div style={{ fontSize: 14 }}>
+                      Complete una venta para ver la hoja de servicio
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t flex justify-center bg-gray-50">
+              <Button
+                variant="outline"
+                onClick={() => setShowServiceSheet(false)}
+                className="px-6 py-2 text-base"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
         <Dialog open={showPdfPreview} onOpenChange={(open) => {
           if (!open) {
             console.log("🚫 Usuario cerró PDF (click fuera/Escape) - cerrando modal padre");
@@ -1735,12 +1845,12 @@ const styles = StyleSheet.create({
                           type="button"
                           variant="outline"
                           size="lg"
-                          onClick={() => setShowPdfPreview(true)}
+                          onClick={() => setShowServiceSheet(true)}
                           disabled={selectedItems.length === 0}
                           className="gap-1 flex items-center justify-center"
                         >
                           <FileText className="h-4 w-4" />
-                          <span>Vista Previa</span>
+                          <span>Hoja de Servicio</span>
                         </Button>
                       )}
                       <div className="w-full space-y-4">

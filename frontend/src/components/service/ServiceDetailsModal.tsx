@@ -27,6 +27,27 @@ const statusOptions = [
   { value: 'COMPLETED', label: 'Completado' },
 ];
 
+// Función para traducir tipos de servicio al español
+const translateServiceType = (type: string | undefined): string => {
+  if (!type) return 'Sin tipo';
+
+  const translations: Record<string, string> = {
+    'REPAIR': 'Reparación',
+    'WARRANTY': 'Garantía',
+    'MAINTENANCE': 'Mantenimiento',
+    'INSTALLATION': 'Instalación',
+    'DIAGNOSTIC': 'Diagnóstico',
+    'OTHER': 'Otro',
+    'IN_PROGRESS': 'En Progreso',
+    'COMPLETED': 'Completado',
+    'PENDING': 'Pendiente',
+    'CANCELLED': 'Cancelado',
+    'PAID': 'Pagado',
+  };
+
+  return translations[type] || type.replace('_', ' ');
+};
+
 export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }: ServiceDetailsModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState(service?.status || '');
@@ -210,7 +231,7 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
                 <div className="col-span-3 space-y-1">
                   <p className="font-medium">{currentService.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {currentService.type ? currentService.type.replace('_', ' ') : 'Sin tipo'}
+                    {translateServiceType(currentService.type)}
                   </p>
                   {currentService.description && (
                     <p className="text-sm text-muted-foreground mt-2">
@@ -250,6 +271,9 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label className="text-right font-medium pt-2">Estado</Label>
                 <div className="col-span-3">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Estado actual: {translateServiceType(currentService.status)}
+                  </p>
                   <Select 
                     value={status} 
                     onValueChange={setStatus}

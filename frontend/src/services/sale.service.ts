@@ -18,7 +18,7 @@ export interface SaleService {
   name: string;
   description: string;
   price: number;
-  type: 'REPAIR' | 'MAINTENANCE' | 'INSTALLATION' | 'OTHER';
+  type: 'REPAIR' | 'WARRANTY';
   photoUrls?: string[];
 }
 

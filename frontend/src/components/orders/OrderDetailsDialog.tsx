@@ -23,13 +23,26 @@ const statusColors = {
   PAID: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
 } as const;
 
-const statusText = {
-  COMPLETED: 'Completado',
-  PENDING: 'Pendiente',
-  CANCELLED: 'Cancelado',
-  IN_PROGRESS: 'En progreso',
-  PAID: 'Pagado'
-} as const;
+// Función para traducir tipos de servicio al español
+const translateServiceType = (type: string | undefined): string => {
+  if (!type) return 'Sin tipo';
+
+  const translations: Record<string, string> = {
+    'REPAIR': 'Reparación',
+    'WARRANTY': 'Garantía',
+    'MAINTENANCE': 'Mantenimiento',
+    'INSTALLATION': 'Instalación',
+    'DIAGNOSTIC': 'Diagnóstico',
+    'OTHER': 'Otro',
+    'IN_PROGRESS': 'En Progreso',
+    'COMPLETED': 'Completado',
+    'PENDING': 'Pendiente',
+    'CANCELLED': 'Cancelado',
+    'PAID': 'Pagado',
+  };
+
+  return translations[type] || type.replace('_', ' ');
+};
 
 interface ProductMap {
   [key: string]: { name: string; price: number; description?: string };
@@ -123,7 +136,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
         <div className="px-6 pt-6 pb-2 border-b border-border flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <DialogTitle className="text-lg sm:text-xl font-semibold">Detalles de la Venta</DialogTitle>
-            <Badge className={statusColors[order.status]}>{statusText[order.status]}</Badge>
+            <Badge className={statusColors[order.status]}>{translateServiceType(order.status)}</Badge>
           </div>
         </div>
         
@@ -225,8 +238,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                           )}
                           <div className="mt-2">
                             <Badge variant="outline" className="mr-2">
-                              {service.type === 'REPAIR' ? 'Reparación' :
-                               service.type === 'WARRANTY' ? 'Garantía' : 'Otro'}
+                              {translateServiceType(service.type)}
                             </Badge>
                             <Badge variant="secondary">
                               S/{service.price.toFixed(2)}
@@ -234,7 +246,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                           </div>
                         </div>
                         <Badge className={statusColors[service.status] || statusColors.PENDING}>
-                          {statusText[service.status as keyof typeof statusText] || (service.status || 'Sin estado')}
+                          {translateServiceType(service.status)}
                         </Badge>
                       </div>
                       

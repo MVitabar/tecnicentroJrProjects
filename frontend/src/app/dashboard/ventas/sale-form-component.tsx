@@ -656,7 +656,7 @@ export function SaleForm({
                 typeof item.price === "string"
                   ? parseFloat(item.price)
                   : item.price,
-              type: item.serviceType === "WARRANTY" ? "WARRANTY" as const : "REPAIR" as const,
+              type: (item.serviceType as 'REPAIR' | 'WARRANTY' || "REPAIR"),
               photoUrls,
             };
           })
@@ -1058,7 +1058,6 @@ const styles = StyleSheet.create({
     return result;
   };
 
-  // Datos de la empresa (puedes mover esto a un archivo de configuración)
   const businessInfo = {
     name: "Tecnicentro JR",
     address: "Av. Ejemplo 123, Lima, Perú",
@@ -1600,6 +1599,7 @@ const styles = StyleSheet.create({
                       >
                         <option value="REPAIR">Reparación</option>
                         <option value="WARRANTY">Garantía</option>
+                        
                       </select>
                     </div>
 

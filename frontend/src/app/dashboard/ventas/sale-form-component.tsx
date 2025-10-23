@@ -1419,7 +1419,7 @@ const styles = StyleSheet.create({
                   </div>
                 </div>
 
-                <div className={newItem.type === "service" ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+                <div className={newItem.type === "service" ? "space-y-4" : newItem.type === "custom" ? "space-y-4" : "grid grid-cols-2 gap-4"}>
                   {/* ✅ Solo mostrar input de precio para servicios y personalizados */}
                   {(() => {
                     const showPrice = newItem.type === "service" || newItem.type === "custom";
@@ -1463,6 +1463,20 @@ const styles = StyleSheet.create({
                   })()}
                 </div>
 
+                {newItem.type === "custom" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Notas/Detalles del ítem</label>
+                    <textarea
+                      name="notes"
+                      value={newItem.notes}
+                      onChange={handleNewItemChange}
+                      className="w-full p-2 border rounded resize-none"
+                      placeholder="Detalles adicionales del ítem personalizado..."
+                      rows={2}
+                    />
+                  </div>
+                )}
+
                 {newItem.type === "service" && (
                   <>
                     <div className="space-y-2">
@@ -1478,6 +1492,19 @@ const styles = StyleSheet.create({
                         <option value="WARRANTY">Garantía</option>
                       </select>
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Notas/Detalles del servicio</label>
+                      <textarea
+                        name="notes"
+                        value={newItem.notes}
+                        onChange={handleNewItemChange}
+                        className="w-full p-2 border rounded resize-none"
+                        placeholder="Describe el problema, detalles del servicio, observaciones..."
+                        rows={3}
+                      />
+                    </div>
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium">
                         Imágenes del servicio

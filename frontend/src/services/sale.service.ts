@@ -6,7 +6,7 @@ export interface ClientInfo {
   email?: string;
   phone?: string;
   address?: string;
-  dni: string;
+  dni?: string;  // Changed from 'string' to 'string | undefined' to match component usage
 }
 
 export interface SaleProduct {

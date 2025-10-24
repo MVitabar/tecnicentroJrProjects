@@ -56,7 +56,7 @@ export interface SaleData {
     email?: string;
     phone?: string;
     address?: string;
-    dni: string;
+    dni?: string;  // Changed from 'string' to 'string | undefined' to match component usage
     ruc?: string;
   };
   products?: Array<{

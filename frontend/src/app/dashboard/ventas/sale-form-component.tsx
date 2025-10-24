@@ -21,9 +21,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer } from "@react-pdf/renderer";
 import ReceiptPDF from './ReceiptPDF';
-import { Document, Page, View, Text, StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
 import {
   Dialog,
   DialogContent,
@@ -115,7 +113,6 @@ export function SaleForm({
   const [searchTerm, setSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showServiceSheet, setShowServiceSheet] = useState(false); // Para la hoja de servicio
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -220,9 +217,11 @@ export function SaleForm({
 
     // Verificar si hay servicios en la venta
     const hasServices = selectedItems.some((item) => item.type === "service");
+    const hasProducts = selectedItems.some((item) => item.type === "product");
 
-    // Solo validar los campos del cliente si hay servicios
-    if (hasServices) {
+    // Validar campos del cliente si hay servicios o productos
+    if (hasServices || hasProducts) {
+      // Validaciones comunes para todos los tipos
       // Validar formato de email si tiene contenido
       if (customerData.email?.trim() && !/\S+@\S+\.\S+/.test(customerData.email)) {
         newErrors.email = "El correo electrónico no es válido";
@@ -236,12 +235,22 @@ export function SaleForm({
         isValid = false;
       }
 
-      if (!customerData.documentNumber?.trim()) {
-        newErrors.documentNumber = "El DNI es obligatorio";
-        isValid = false;
-      } else if (!/^[0-9]{8}$/.test(customerData.documentNumber)) {
-        newErrors.documentNumber = "El DNI debe tener 8 dígitos";
-        isValid = false;
+      // Validar DNI si hay servicios (obligatorio) o si se completó (formato)
+      if (hasServices) {
+        // Para servicios, DNI es obligatorio
+        if (!customerData.documentNumber?.trim()) {
+          newErrors.documentNumber = "El DNI es obligatorio para servicios";
+          isValid = false;
+        } else if (!/^[0-9]{8}$/.test(customerData.documentNumber)) {
+          newErrors.documentNumber = "El DNI debe tener 8 dígitos";
+          isValid = false;
+        }
+      } else if (hasProducts && customerData.documentNumber?.trim()) {
+        // Para productos, DNI es opcional pero si se ingresa debe ser válido
+        if (!/^[0-9]{8}$/.test(customerData.documentNumber)) {
+          newErrors.documentNumber = "El DNI debe tener 8 dígitos si se ingresa";
+          isValid = false;
+        }
       }
     }
 
@@ -273,7 +282,6 @@ export function SaleForm({
       uploadedFiles: [],
       failedFiles: [],
     });
-    setShowPdfPreview(false); // Cerrar vista previa del PDF
     setShowUploadError(false);
     setForceSubmit(false);
     setOrderId(null);
@@ -293,26 +301,11 @@ export function SaleForm({
     console.log("✅ Estado de venta reseteado completamente");
   }, []);
 
-  useEffect(() => {
-    if (showPdfPreview) {
-      console.log("🎬 Vista previa PDF abierta");
-      console.log("🎬 Estado actual - selectedItems:", selectedItems.length);
-      console.log("🎬 Estado actual - orderNumber:", orderNumber);
-
-      if (orderNumber) {
-        console.log("✅ OrderNumber disponible:", orderNumber);
-      } else {
-        console.log("❌ OrderNumber NO disponible - esto es el problema");
-      }
-    }
-  }, [showPdfPreview, selectedItems, orderNumber, orderId]);
-
   // ✅ Limpiar estado cuando se abre una nueva venta
   useEffect(() => {
     if (isOpen) {
       console.log("🚪 Nueva venta abierta - limpiando estado anterior");
       resetSaleState();
-      setShowPdfPreview(false);
       setShowUploadError(false);
     }
   }, [isOpen, resetSaleState]);
@@ -573,11 +566,12 @@ export function SaleForm({
       return;
     }
 
-    // Verificar si hay servicios en la venta
+    // Verificar si hay servicios o productos en la venta
     const hasServices = selectedItems.some((item) => item.type === "service");
+    const hasProducts = selectedItems.some((item) => item.type === "product");
 
-    // Si hay servicios, usar el flujo actual
-    if (hasServices) {
+    // Si hay servicios o productos, validar formulario
+    if (hasServices || hasProducts) {
       if (!validateForm()) {
         const firstErrorField = Object.keys(errors)[0];
         if (firstErrorField) {
@@ -660,14 +654,14 @@ export function SaleForm({
         return;
       }
 
-      // Usar los datos del cliente si hay servicios, de lo contrario usar los valores por defecto
-      const clientInfo = hasServices
+      // Usar los datos del cliente si hay servicios o productos, de lo contrario usar los valores por defecto
+      const clientInfo = (hasServices || hasProducts)
         ? {
-            name: customerData.name,
-            email: customerData.email,
-            phone: customerData.phone,
-            address: customerData.address || "",
-            dni: customerData.documentNumber,
+            name: customerData.name || (hasServices ? "Venta" : "Cliente"),
+            email: customerData.email || (hasServices ? "venta@venta.com" : "cliente@ejemplo.com"),
+            phone: customerData.phone || (hasServices ? "123456789" : "999999999"),
+            address: customerData.address || (hasServices ? "Venta" : "Sin dirección"),
+            dni: customerData.documentNumber || (hasServices ? "11111111" : "00000000"),
             ...(customerData.ruc && { ruc: customerData.ruc }),
           }
         : defaultClientInfo;
@@ -685,20 +679,12 @@ export function SaleForm({
         // Guardar el orderNumber para mostrarlo en el PDF
         setOrderNumber(result.orderNumber || null);
 
-        // ✅ FLUJO DIFERENTE SEGÚN TIPO DE VENTA
-
-        if (hasServices) {
-          // Si hay servicios: mostrar vista previa PDF directamente
-          console.log("📋 Mostrando vista previa PDF con delay para asegurar datos");
-          setShowPdfPreview(true);
-        } else {
-          // Si NO hay servicios (solo productos): también mostrar vista previa PDF
-          console.log("📋 Mostrando vista previa PDF para productos con delay para asegurar datos");
-          setShowPdfPreview(true);
-        }
+        // ✅ Mostrar el PDF solo después de que la venta se concrete exitosamente
+        console.log("✅ Venta completada - mostrando hoja de servicio");
+        setShowServiceSheet(true);
 
         // ✅ El formulario se mantiene intacto hasta que el usuario cierre el PDF
-        console.log("📋 PDF preview se mostrará - el usuario decidirá cuándo cerrar");
+        console.log("📋 Hoja de servicio se mostrará - el usuario decidirá cuándo cerrar");
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
@@ -714,7 +700,7 @@ export function SaleForm({
   const renderCustomerForm = () => (
     <div className="space-y-6 p-6 border rounded-lg bg-card shadow-sm">
       <h3 className="text-xl font-semibold text-foreground">
-        Datos del Cliente
+        Información del Cliente (Opcional)
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
@@ -841,13 +827,17 @@ export function SaleForm({
         </div>
       </div>
 
-      {selectedItems.some((item) => item.type === "service") && (
+      {selectedItems.length > 0 && (
         <div className="mt-4 p-3 bg-muted/30 rounded-md border border-muted">
           <p className="text-sm text-muted-foreground flex items-center">
             <Info className="h-4 w-4 mr-2 flex-shrink-0" />
             <span>
-              Solo el DNI es obligatorio cuando se incluyen servicios.
-              Los campos de email y teléfono son opcionales pero se validan si se completan.
+              <strong>Información del cliente:</strong> Complete los datos del cliente para un mejor seguimiento de sus ventas.
+              {selectedItems.some((item) => item.type === "service") && (
+                <span className="block mt-1">
+                  <strong>Nota:</strong> El DNI es obligatorio para servicios.
+                </span>
+              )}
             </span>
           </p>
         </div>
@@ -990,6 +980,7 @@ const styles = StyleSheet.create({
       quantity: item.quantity,
       total: item.price * item.quantity,
       notes: item.notes || "",
+      type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
     }));
 
     const subtotal = selectedItems.reduce(
@@ -998,23 +989,14 @@ const styles = StyleSheet.create({
     );
     const total = subtotal;
 
-    const hasServices = selectedItems.some((item) => item.type === "service");
-
-    const customerInfo = hasServices
-      ? {
-          name: customerData.name || "Venta",
-          phone: customerData.phone || "123456789",
-          documentNumber: customerData.documentNumber || "11111111",
-          email: customerData.email || "venta@venta.com",
-          address: customerData.address || "Venta",
-        }
-      : {
-          name: defaultClientInfo.name,
-          phone: defaultClientInfo.phone,
-          documentNumber: defaultClientInfo.dni,
-          email: defaultClientInfo.email,
-          address: defaultClientInfo.address,
-        };
+    // ✅ Usar siempre los datos del cliente proporcionados por el usuario
+    const customerInfo = {
+      name: customerData.name || "Cliente",
+      phone: customerData.phone || "999999999",
+      documentNumber: customerData.documentNumber || "00000000",
+      email: customerData.email || "cliente@ejemplo.com",
+      address: customerData.address || "Sin dirección",
+    };
 
     const result = {
       customerName: customerInfo.name,
@@ -1051,6 +1033,7 @@ const styles = StyleSheet.create({
       price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
       quantity: item.quantity,
       notes: item.notes || "",
+      type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
     }));
 
     const subtotal = selectedItems.reduce(
@@ -1059,25 +1042,15 @@ const styles = StyleSheet.create({
     );
     const total = subtotal;
 
-    const hasServices = selectedItems.some((item) => item.type === "service");
-
-    const customerInfo = hasServices
-      ? {
-          name: customerData.name || "Cliente",
-          phone: customerData.phone || "123456789",
-          documentNumber: customerData.documentNumber || "11111111",
-          email: customerData.email || "cliente@cliente.com",
-          address: customerData.address || "Cliente",
-          documentType: "DNI"
-        }
-      : {
-          name: defaultClientInfo.name,
-          phone: defaultClientInfo.phone,
-          documentNumber: defaultClientInfo.dni,
-          email: defaultClientInfo.email,
-          address: defaultClientInfo.address,
-          documentType: "DNI"
-        };
+    // ✅ Usar siempre los datos del cliente proporcionados por el usuario
+    const customerInfo = {
+      name: customerData.name || "Cliente",
+      phone: customerData.phone || "999999999",
+      documentNumber: customerData.documentNumber || "00000000",
+      email: customerData.email || "cliente@ejemplo.com",
+      address: customerData.address || "Sin dirección",
+      documentType: "DNI"
+    };
 
     return {
       customerName: customerInfo.name,
@@ -1159,11 +1132,28 @@ const styles = StyleSheet.create({
 
           <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
             <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              <strong>Cliente:</strong> {(() => {
-                const hasServices = selectedItems.some((item) => item.type === "service");
-                return hasServices ? (customerData.name || "Cliente") : defaultClientInfo.name;
-              })()}
+              <strong>Cliente:</strong> {customerData.name || "Cliente"}
             </p>
+            {customerData.documentNumber && (
+              <p style={{ margin: '2px 0', fontSize: '10px' }}>
+                <strong>DNI:</strong> {customerData.documentNumber}
+              </p>
+            )}
+            {customerData.phone && (
+              <p style={{ margin: '2px 0', fontSize: '10px' }}>
+                <strong>Tel:</strong> {customerData.phone}
+              </p>
+            )}
+            {customerData.email && (
+              <p style={{ margin: '2px 0', fontSize: '10px' }}>
+                <strong>Email:</strong> {customerData.email}
+              </p>
+            )}
+            {customerData.address && (
+              <p style={{ margin: '2px 0', fontSize: '10px' }}>
+                <strong>Dirección:</strong> {customerData.address}
+              </p>
+            )}
           </div>
 
           <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
@@ -1203,13 +1193,16 @@ const styles = StyleSheet.create({
         {/* Diálogo de hoja de servicio */}
         <Dialog open={showServiceSheet} onOpenChange={(open) => {
           if (!open) {
+            console.log("🚫 Usuario cerró hoja de servicio - reseteando formulario y cerrando modal padre");
+            resetSaleState(); // Reset completo cuando el usuario cierra la hoja de servicio
             setShowServiceSheet(false);
+            onClose(); // Cerrar el modal padre
           }
         }}>
           <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
             <DialogHeader className="px-6 pt-4 pb-2 border-b">
               <DialogTitle className="text-2xl font-bold">
-                Hoja de Servicio - Vista Previa
+                Comprobante de Venta
               </DialogTitle>
             </DialogHeader>
             <div className="flex-1 overflow-hidden p-0">
@@ -1252,166 +1245,6 @@ const styles = StyleSheet.create({
               <Button
                 variant="outline"
                 onClick={() => setShowServiceSheet(false)}
-                className="px-6 py-2 text-base"
-              >
-                Cerrar
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={showPdfPreview} onOpenChange={(open) => {
-          if (!open) {
-            console.log("🚫 Usuario cerró PDF (click fuera/Escape) - cerrando modal padre");
-            setShowPdfPreview(false);
-            onClose(); // Cerrar el modal padre sin reset
-          }
-        }}>
-          <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
-            <DialogHeader className="px-6 pt-4 pb-2 border-b">
-              <DialogTitle className="text-2xl font-bold">
-                Vista Previa del Comprobante
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-hidden p-0">
-              {showPdfPreview ? (
-                <PDFViewer
-                  width="100%"
-                  height="100%"
-                  style={{
-                    border: "none",
-                    minHeight: "calc(98vh - 120px)",
-                    backgroundColor: "white",
-                  }}
-                >
-                  {(() => {
-                    console.log("🎬 PDFViewer renderizándose");
-                    const receiptData = generateReceiptData();
-                    console.log("📄 OrderNumber:", receiptData.orderNumber);
-                    console.log("📄 Items:", receiptData.items?.length || 0);
-
-                    // Verificar si hay datos válidos para mostrar en el PDF
-                    const hasValidData = receiptData.items && receiptData.items.length > 0;
-
-                    if (!hasValidData) {
-                      return (
-                        <Document>
-                          <Page size="A4" style={{ padding: 30, backgroundColor: "white" }}>
-                            <View style={{ textAlign: "center", marginTop: 100 }}>
-                              <Text style={{ fontSize: 16, color: "#666" }}>
-                                No hay datos para mostrar en el comprobante
-                              </Text>
-                            </View>
-                          </Page>
-                        </Document>
-                      );
-                    }
-
-                    return (
-                      <Document>
-                        <Page size="A4" style={styles.page}>
-                          <View style={styles.receipt}>
-                            {/* Header con logo */}
-                            <View style={styles.logoContainer}>
-                              <PDFImage
-                                src={logo}
-                                style={styles.logo}
-                              />
-                              <View style={styles.header}>
-                                <Text style={styles.title}>{businessInfo.name}</Text>
-                                <Text style={styles.subtitle}>{businessInfo.address}</Text>
-                                <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
-                                <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
-                                <Text style={styles.subtitle}>{format(new Date(), "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es })}</Text>
-                                {receiptData.orderNumber && (
-                                  <Text style={styles.subtitle}>Orden N°: {receiptData.orderNumber}</Text>
-                                )}
-                              </View>
-                            </View>
-
-                            {/* Datos del cliente */}
-                            <View style={styles.section}>
-                              <Text style={styles.sectionTitle}>Datos del Cliente</Text>
-                              <View style={styles.row}>
-                                <Text>Nombre: {receiptData.customerName || 'Cliente ocasional'}</Text>
-                                {receiptData.customer.documentNumber && (
-                                  <Text>
-                                    DNI: {receiptData.customer.documentNumber}
-                                  </Text>
-                                )}
-                              </View>
-                              {receiptData.customer.phone && (
-                                <View style={styles.row}>
-                                  <Text>Teléfono: {receiptData.customer.phone}</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            {/* Detalle de productos */}
-                            <View style={styles.section}>
-                              <Text style={styles.sectionTitle}>Detalle de la Venta</Text>
-                              <View style={[styles.row, { marginBottom: 5 }]}>
-                                <Text style={[styles.col, { fontWeight: 'bold' }]}>Descripción</Text>
-                                <Text style={[styles.col, { textAlign: 'center', fontWeight: 'bold' }]}>Cant.</Text>
-                                <Text style={[styles.colRight, { fontWeight: 'bold' }]}>Importe</Text>
-                              </View>
-
-                              {receiptData.items.map((item: { name: string; quantity: number; total: number; notes?: string }, index: number) => (
-                                <View key={index} style={styles.itemRow}>
-                                  <Text style={styles.itemName}>
-                                    {item.name}
-                                    {item.notes && ` (${item.notes})`}
-                                  </Text>
-                                  <Text style={styles.itemQty}>x{item.quantity}</Text>
-                                  <Text style={styles.itemPrice}>S/{item.total.toFixed(2)}</Text>
-                                </View>
-                              ))}
-
-                              <View style={styles.totalRow}>
-                                <Text>TOTAL</Text>
-                                <Text>S/{receiptData.total.toFixed(2)}</Text>
-                              </View>
-                            </View>
-
-                            {/* Footer */}
-                            <View style={styles.footer}>
-                              <Text>{businessInfo.footerText}</Text>
-                              <Text>Gracias por su compra - CLIENTE</Text>
-                            </View>
-                          </View>
-                        </Page>
-                      </Document>
-                    );
-                  })()}
-                </PDFViewer>
-              ) : (
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: "100%",
-                  backgroundColor: "white",
-                  color: "#666"
-                }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 16, marginBottom: 10 }}>
-                      Vista previa del PDF
-                    </div>
-                    <div style={{ fontSize: 14 }}>
-                      Complete una venta para ver el comprobante
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="p-3 border-t flex justify-center bg-gray-50">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  console.log("🚫 Usuario cerró PDF - reseteando formulario y cerrando modal padre");
-                  resetSaleState(); // Reset completo cuando el usuario cierra el PDF
-                  setShowPdfPreview(false);
-                  onClose(); // Cerrar el modal padre
-                }}
                 className="px-6 py-2 text-base"
               >
                 Cerrar
@@ -1692,8 +1525,8 @@ const styles = StyleSheet.create({
                 </Button>
               </form>
 
-              {/* Sección del cliente - solo mostrar si hay servicios */}
-              {selectedItems.some(item => item.type === 'service') && renderCustomerForm()}
+              {/* Formulario de cliente - se muestra cuando hay items en el carrito */}
+              {selectedItems.length > 0 && renderCustomerForm()}
             </div>
 
             {/* Panel derecho - Carrito */}
@@ -1816,19 +1649,6 @@ const styles = StyleSheet.create({
                     </div>
 
                     <div className="mt-6 items-center justify-between space-y-2">
-                      {selectedItems.some(item => item.type === 'service') && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="lg"
-                          onClick={() => setShowServiceSheet(true)}
-                          disabled={selectedItems.length === 0}
-                          className="gap-1 flex items-center justify-center"
-                        >
-                          <FileText className="h-4 w-4" />
-                          <span>Hoja de Servicio</span>
-                        </Button>
-                      )}
                       <div className="w-full space-y-4">
                         {uploadStatus.inProgress && (
                           <div className="w-full bg-background/50 p-3 rounded-lg border">
@@ -1973,5 +1793,3 @@ const styles = StyleSheet.create({
     </div>
   );
 }
-
-export default SaleForm;

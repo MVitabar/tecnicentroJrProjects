@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { orderService, type Order } from "@/services/order.service";
 import { productService, type Product } from "@/services/product.service";
 import { SaleForm } from "./sale-form-component";
@@ -68,24 +68,15 @@ export default function VentasPage() {
     }
   };
 
-  const loadData = useCallback(async (search: string = "") => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const productsResponse = await productService.getProducts(1, 100);
       setProducts(productsResponse.data || []);
 
       const ordersData = await orderService.getOrders();
-      // Filtrar órdenes si hay un término de búsqueda
-      const filteredOrders = search
-        ? ordersData.filter(
-            (order) =>
-              order.id?.toLowerCase().includes(search.toLowerCase()) ||
-              order.paymentMethod?.toLowerCase().includes(search.toLowerCase()) ||
-              order.client?.name?.toLowerCase().includes(search.toLowerCase())
-          )
-        : ordersData;
-
-      setOrders(filteredOrders);
+      // No filtrar aquí, lo haremos localmente
+      setOrders(ordersData);
       setCurrentPage(1); // Resetear a la primera página cuando cambian los datos
     } catch (error) {
       console.error("Error al cargar datos:", error);
@@ -99,19 +90,37 @@ export default function VentasPage() {
     loadData();
   }, [loadData]);
 
-  // Lógica de paginación
-  const totalPages = Math.ceil(orders.length / itemsPerPage);
+  // Función de filtrado local para búsqueda en tiempo real
+  const filteredOrders = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return orders;
+    }
+
+    const term = searchTerm.toLowerCase();
+    return orders.filter(
+      (order) =>
+        order.id?.toLowerCase().includes(term) ||
+        order.paymentMethod?.toLowerCase().includes(term) ||
+        order.client?.name?.toLowerCase().includes(term) ||
+        order.client?.phone?.toLowerCase().includes(term) ||
+        order.client?.email?.toLowerCase().includes(term) ||
+        order.client?.dni?.toLowerCase().includes(term)
+    );
+  }, [orders, searchTerm]);
+
+  // Lógica de paginación basada en los datos filtrados
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = orders.slice(startIndex, endIndex);
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadData(searchTerm);
+  const clearSearch = () => {
+    setSearchTerm('');
+    setCurrentPage(1); // Resetear a la primera página al limpiar búsqueda
   };
 
   const handleCreateOrder = async (orderData: SaleData) => {
@@ -272,12 +281,12 @@ export default function VentasPage() {
             </div>
             
             <div className="space-y-3">
-              <form onSubmit={handleSearch} className="w-full">
+              <div className="w-full">
                 <div className="relative max-w-2xl">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Buscar por ID, cliente o método de pago..."
+                    placeholder="Buscar por ID, cliente, teléfono, email o DNI..."
                     className="pl-9 w-full"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -285,23 +294,35 @@ export default function VentasPage() {
                   {searchTerm && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setSearchTerm('');
-                        loadData('');
-                      }}
+                      onClick={clearSearch}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Limpiar búsqueda"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
-              </form>
+              </div>
               
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Info className="h-3.5 w-3.5" />
                 <span>
-                  Mostrando {paginatedOrders.length} de {orders.length} ventas
-                  {currentPage > 1 && ` (página ${currentPage} de ${totalPages})`}
+                  {searchTerm ? (
+                    <>
+                      Mostrando <strong>{paginatedOrders.length}</strong> de <strong>{filteredOrders.length}</strong> ventas
+                      {filteredOrders.length !== orders.length && (
+                        <span className="text-blue-600 dark:text-blue-400">
+                          {' '}(filtrado de {orders.length} total)
+                        </span>
+                      )}
+                      {currentPage > 1 && ` - página ${currentPage} de ${totalPages}`}
+                    </>
+                  ) : (
+                    <>
+                      Mostrando <strong>{paginatedOrders.length}</strong> de <strong>{orders.length}</strong> ventas
+                      {currentPage > 1 && ` - página ${currentPage} de ${totalPages}`}
+                    </>
+                  )}
                 </span>
               </div>
             </div>
@@ -438,7 +459,22 @@ export default function VentasPage() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                        No se encontraron ventas
+                        <div className="flex flex-col items-center gap-2">
+                          <Search className="h-8 w-8 text-muted-foreground/50" />
+                          <div className="text-center">
+                            <p className="font-medium">
+                              {searchTerm
+                                ? `No se encontraron ventas que coincidan con "${searchTerm}"`
+                                : 'No se encontraron ventas'
+                              }
+                            </p>
+                            {searchTerm && (
+                              <p className="text-sm mt-1">
+                                Intenta con otros términos como ID, nombre del cliente, teléfono, email o DNI
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}
@@ -448,7 +484,7 @@ export default function VentasPage() {
           </div>
           
           {/* Controles de paginación */}
-          {orders.length > itemsPerPage && (
+          {filteredOrders.length > itemsPerPage && (
             <div className="flex items-center justify-between px-4 py-3 border-t">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>
@@ -501,21 +537,28 @@ export default function VentasPage() {
             </div>
           )}
           
-          {orders.length === 0 && (
+          {filteredOrders.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground">No hay ventas registradas</h3>
+              <h3 className="text-lg font-medium text-muted-foreground">
+                {searchTerm ? 'No se encontraron ventas' : 'No hay ventas registradas'}
+              </h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                Comienza creando tu primera venta haciendo clic en el botón &quot;Nueva Venta&quot;
+                {searchTerm
+                  ? `No se encontraron ventas que coincidan con "${searchTerm}". Intenta con otros términos de búsqueda.`
+                  : 'Comienza creando tu primera venta haciendo clic en el botón "Nueva Venta"'
+                }
               </p>
-              <Button 
-                onClick={() => setIsFormOpen(true)}
-                className="mt-4"
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Crear primera venta
-              </Button>
+              {!searchTerm && (
+                <Button
+                  onClick={() => setIsFormOpen(true)}
+                  className="mt-4"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear primera venta
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -532,7 +575,11 @@ export default function VentasPage() {
 
       <SaleForm
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false);
+          // Recargar la lista después de cerrar el modal para asegurarse de que la nueva venta aparezca
+          loadData();
+        }}
         onSubmit={async (data) => {
           const transformedData: SaleData = {
             ...data,

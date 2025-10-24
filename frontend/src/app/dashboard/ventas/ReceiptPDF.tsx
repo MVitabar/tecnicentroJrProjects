@@ -161,12 +161,15 @@ interface ReceiptPDFProps {
       documentNumber?: string;
       documentType?: string;
       phone?: string;
+      email?: string;
+      address?: string;
     };
     items: Array<{
       name: string;
       quantity: number;
       price: number;
       notes?: string;
+      type?: 'product' | 'service' | 'custom';
     }>;
     total: number;
     orderId?: string;
@@ -178,6 +181,9 @@ interface ReceiptPDFProps {
 const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
   const currentDate = new Date();
   const formattedDate = format(currentDate, "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es });
+
+  // Verificar si hay servicios en la venta
+  const hasServices = saleData.items.some((item) => item.type === 'service');
 
   const renderReceipt = (copy: 'CLIENTE' | 'COMERCIO') => (
     <View style={styles.receipt}>
@@ -219,6 +225,16 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
             <Text>Teléfono: {saleData.customer.phone}</Text>
           </View>
         )}
+        {saleData.customer.email && (
+          <View style={styles.row}>
+            <Text>Email: {saleData.customer.email}</Text>
+          </View>
+        )}
+        {saleData.customer.address && (
+          <View style={styles.row}>
+            <Text>Dirección: {saleData.customer.address}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -246,7 +262,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
         </View>
       </View>
 
-      {copy === 'CLIENTE' && (
+      {copy === 'CLIENTE' && hasServices && (
         <View style={{
           marginTop: 12,
           padding: 8,

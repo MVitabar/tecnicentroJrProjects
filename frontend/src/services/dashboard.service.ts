@@ -125,46 +125,8 @@ export interface DashboardStats {
 }
 
 export const dashboardService = {
-  // Función de prueba para verificar endpoints individuales
-  async testEndpoints() {
-    console.log('=== PROBANDO ENDPOINTS ===');
-
-    try {
-      const clientsRes = await api.get('/clientes');
-      console.log('✅ /clientes:', clientsRes.status, clientsRes.data?.length || 0, 'items');
-    } catch (err: unknown) {
-      const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /clientes falló:', error.response?.status, error.message);
-    }
-
-    try {
-      const productsRes = await api.get('/products/all');
-      console.log('✅ /products/all:', productsRes.status, productsRes.data?.data?.length || 0, 'items');
-    } catch (err: unknown) {
-      const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /products/all falló:', error.response?.status, error.message);
-    }
-
-    try {
-      const servicesRes = await api.get('/services/findAll');
-      console.log('✅ /services/findAll:', servicesRes.status, servicesRes.data?.length || 0, 'items');
-    } catch (err: unknown) {
-      const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /services/findAll falló:', error.response?.status, error.message);
-    }
-
-    try {
-      const ordersRes = await api.get('/orders/all');
-      console.log('✅ /orders/all:', ordersRes.status, ordersRes.data?.length || 0, 'items');
-    } catch (err: unknown) {
-      const error = err as { response?: { status?: number }; message?: string };
-      console.error('❌ /orders/all falló:', error.response?.status, error.message);
-    }
-  },
-
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      console.log('Obteniendo datos del dashboard...');
 
       // Obtener datos en paralelo
       const [ordersRes, clientsRes, productsRes, servicesRes] = await Promise.all([
@@ -196,119 +158,8 @@ export const dashboardService = {
         }
       }
 
-      console.log('=== DETALLES DE RESPUESTA ===');
-      console.log('Orders response:', ordersRes);
-      console.log('Clients response:', clientsRes);
-      console.log('Products response:', productsRes);
-      console.log('Services response:', servicesRes);
-
-      console.log('=== DATOS PROCESADOS ===');
-      console.log('Orders count:', orders.length);
-      console.log('Clients count:', clients.length);
-      console.log('Products count:', products.length);
-      console.log('Services count:', services.length);
-
-      console.log('=== MUESTRA DE DATOS ===');
-      console.log('First client:', clients[0]);
-      console.log('Client structure:', clients[0] ? Object.keys(clients[0]) : 'No clients');
-      console.log('Clients response data type:', typeof clientsRes.data);
-      console.log('Clients response data keys:', clientsRes.data ? Object.keys(clientsRes.data) : 'No data');
-      console.log('Clients response data.data type:', typeof clientsRes.data?.data);
-      console.log('Clients response data.data length:', clientsRes.data?.data?.length);
-
-      // Datos de respaldo para productos (en caso de que falle la carga)
-      const fallbackProducts = [
-        {
-          id: '1',
-          name: 'Producto Demo 1',
-          price: 100,
-          stock: 50,
-          description: 'Producto de demostración con características especiales',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: '2',
-          name: 'Producto Demo 2',
-          price: 150,
-          stock: 25,
-          description: 'Producto avanzado con tecnología de vanguardia',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: '3',
-          name: 'Producto Demo 3',
-          price: 200,
-          stock: 5,
-          description: 'Producto premium con garantía extendida',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-
-      // Datos de respaldo para servicios (en caso de que falle la carga)
-      const fallbackServices = [
-        {
-          id: '1',
-          name: 'Servicio Demo 1',
-          price: 75,
-          description: 'Servicio de demostración',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: '2',
-          name: 'Servicio Demo 2',
-          price: 100,
-          description: 'Servicio de demostración 2',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-
-      // Datos de respaldo para órdenes (en caso de que falle la carga)
-      const fallbackOrders = [
-        {
-          id: 'demo-order-1',
-          totalAmount: 150.50,
-          status: 'COMPLETED',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          userId: 'demo-user',
-          clientId: 'demo-client-1',
-          user: undefined,
-          client: {
-            id: 'demo-client-1',
-            name: 'Cliente Demo',
-            email: 'cliente@demo.com',
-            phone: '123456789'
-          },
-          orderProducts: [
-            {
-              id: 'demo-product-1',
-              quantity: 2,
-              price: 50.25,
-              productId: 'demo-prod-1',
-              product: {
-                id: 'demo-prod-1',
-                name: 'Producto Demo',
-                description: 'Producto de demostración',
-                price: 50.25,
-                stock: 10
-              }
-            }
-          ],
-          services: []
-        }
-      ];
-
-      const ordersData = orders.length > 0 ? orders : fallbackOrders;
-      const productsData = products.length > 0 ? products : fallbackProducts;
-      const servicesData = services.length > 0 ? services : fallbackServices;
-
       // Calcular resumen de ventas (solo para órdenes completadas)
-      const completedOrders = ordersData.filter((order: Order) => order.status === 'COMPLETED');
+      const completedOrders = orders.filter((order: Order) => order.status === 'COMPLETED');
 
       const salesTotal = completedOrders.reduce((sum: number, order: Order) => {
         // Sumar el monto total de cada orden
@@ -320,7 +171,7 @@ export const dashboardService = {
 
       // Calcular resumen de productos
       const lowStockThreshold = 10;
-      const lowStockCount = productsData.filter((p: Product) => p.stock <= lowStockThreshold).length;
+      const lowStockCount = products.filter((p: Product) => p.stock <= lowStockThreshold).length;
 
       // Calcular resumen de clientes
       const currentMonth = new Date().getMonth();
@@ -331,17 +182,17 @@ export const dashboardService = {
       }).length;
 
       // Obtener ventas recientes (últimas 5)
-      const recentSales = ordersData
+      const recentSales = orders
         .sort((a: Order, b: Order) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 5);
 
       // Obtener productos principales (por stock)
-      const topProducts = productsData
+      const topProducts = products
         .sort((a: Product, b: Product) => b.stock - a.stock)
         .slice(0, 5);
 
       // Obtener servicio más popular
-      const mostPopularService = servicesData[0]?.name || 'Ninguno';
+      const mostPopularService = services[0]?.name || 'Ninguno';
 
       return {
         salesSummary: {
@@ -350,11 +201,11 @@ export const dashboardService = {
           average: parseFloat(salesAverage.toFixed(2)),
         },
         productsSummary: {
-          total: productsData.length,
+          total: products.length,
           lowStock: lowStockCount,
         },
         servicesSummary: {
-          total: servicesData.length,
+          total: services.length,
           mostPopular: mostPopularService,
         },
         clientsSummary: {
@@ -388,8 +239,28 @@ export const dashboardService = {
         })),
       };
     } catch (error) {
-      console.error('Error al obtener datos del dashboard:', error);
-      throw new Error('No se pudieron cargar los datos del dashboard');
+      // En producción, devolver datos con valores por defecto en lugar de fallar
+      return {
+        salesSummary: {
+          total: 0,
+          count: 0,
+          average: 0,
+        },
+        productsSummary: {
+          total: 0,
+          lowStock: 0,
+        },
+        servicesSummary: {
+          total: 0,
+          mostPopular: 'Ninguno',
+        },
+        clientsSummary: {
+          total: 0,
+          newThisMonth: 0,
+        },
+        recentSales: [],
+        topProducts: [],
+      };
     }
   },
 };

@@ -74,16 +74,11 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      // Primero vamos a probar los endpoints para ver qué está pasando
-      console.log('Testing endpoints...');
-      await dashboardService.testEndpoints();
-
       const data = await dashboardService.getDashboardStats();
       setStats(data);
       setLastUpdated(new Date());
       toast.success('Datos actualizados correctamente');
     } catch (err) {
-      console.error('Error al cargar los datos del dashboard:', err);
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido al cargar los datos';
 
       // Si hay problemas específicos con los datos, mostrar información más detallada

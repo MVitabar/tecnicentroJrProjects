@@ -33,7 +33,7 @@ export const uploadImage = async (
     const xhr = new XMLHttpRequest();
     
     return new Promise((resolve, reject) => {
-      xhr.open('POST', `${process.env.NEXT_PUBLIC_API_URL || ''}/images/upload`, true);
+      xhr.open('POST', `${process.env.NEXT_PUBLIC_API_URL || ''}images/upload`, true);
       
       // Configurar el manejador de progreso
       xhr.upload.onprogress = (event) => {

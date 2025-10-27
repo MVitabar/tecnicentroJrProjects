@@ -45,7 +45,10 @@ export default function ProductsPage() {
   // Inicializar hooks
   const router = useRouter();
   const { toast } = useToast();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
+
+  // Función helper para verificar si el usuario es USER (no admin)
+  const isUser = isAuthenticated && !isAdmin;
   const calculateFinalPrice = (buycost: number, profitType: 'fixed' | 'percentage', profitValue: number): number => {
     if (profitType === 'fixed') {
       return buycost + profitValue;
@@ -226,7 +229,7 @@ export default function ProductsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Productos</h1>
-          <Button onClick={openNewProductModal}>
+          <Button onClick={openNewProductModal} disabled={!isAuthenticated}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Producto
           </Button>

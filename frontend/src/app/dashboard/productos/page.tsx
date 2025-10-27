@@ -226,12 +226,10 @@ export default function ProductsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Productos</h1>
-        {isAdmin && (
           <Button onClick={openNewProductModal}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Producto
           </Button>
-        )}
       </div>
 
       <div className="mb-6">

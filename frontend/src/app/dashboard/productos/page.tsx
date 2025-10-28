@@ -45,10 +45,9 @@ export default function ProductsPage() {
   // Inicializar hooks
   const router = useRouter();
   const { toast } = useToast();
-  const { isAuthenticated, isAdmin, user } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
 
   // Función helper para verificar si el usuario es USER (no admin)
-  const isUser = isAuthenticated && !isAdmin;
   const calculateFinalPrice = (buycost: number, profitType: 'fixed' | 'percentage', profitValue: number): number => {
     if (profitType === 'fixed') {
       return buycost + profitValue;
@@ -463,7 +462,8 @@ export default function ProductsPage() {
                     name="stock"
                     value={formData.stock}
                     onChange={handleInputChange}
-                    min="0"
+                    min=""
+                    placeholder="0"
                     required
                   />
                 </div>

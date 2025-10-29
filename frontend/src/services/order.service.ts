@@ -145,7 +145,12 @@ export const orderService = {
         ...(orderData.clientInfo && { clientInfo: orderData.clientInfo }),
         ...(orderData.products && { 
           products: orderData.products.map(p => {
-            const productData: any = {
+            const productData: {
+              productId: string;
+              quantity: number;
+              price?: number;
+              customPrice?: number;
+            } = {
               productId: p.productId,
               quantity: p.quantity
             };

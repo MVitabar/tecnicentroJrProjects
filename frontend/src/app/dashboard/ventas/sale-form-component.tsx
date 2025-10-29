@@ -624,7 +624,12 @@ export function SaleForm({
                                item.customPrice !== item.price;
           
           // Crear el objeto base del producto
-          const productData: any = {
+          const productData: {
+            productId: string;
+            quantity: number;
+            price?: number;
+            customPrice?: number;
+          } = {
             productId: item.id,
             quantity: item.quantity
           };

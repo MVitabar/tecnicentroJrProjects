@@ -186,11 +186,16 @@ export default function VentasPage() {
         orderDataForBackend.products = products.map((product, index) => {
           // Determinar si hay un precio personalizado válido
           const hasCustomPrice = product.customPrice !== undefined && 
-                               product.customPrice > 0 && 
-                               product.customPrice !== product.price;
+          product.customPrice > 0 && 
+          product.customPrice !== product.price;
           
           // Crear el objeto base del producto
-          const productData: any = {
+          const productData: {
+            productId: string;
+            quantity: number;
+            price?: number;
+            customPrice?: number;
+          } = {
             productId: product.productId,
             quantity: product.quantity || 1
           };

@@ -110,6 +110,12 @@ const styles = StyleSheet.create({
   itemName: {
     flex: 3,
   },
+  originalPrice: {
+    fontSize: 7, 
+    color: '#64748b',
+    textDecoration: 'line-through',
+    marginTop: 1,
+  },
   itemQty: {
     flex: 1,
     textAlign: 'center',
@@ -168,9 +174,12 @@ interface ReceiptPDFProps {
       name: string;
       quantity: number;
       price: number;
+      originalPrice?: number;
+      hasCustomPrice?: boolean;
       notes?: string;
       type?: 'product' | 'service' | 'custom';
     }>;
+    subtotal: number;
     total: number;
     orderId?: string;
     orderNumber?: string;
@@ -245,16 +254,31 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
           <Text style={[styles.colRight, { fontWeight: 'bold' }]}>Importe</Text>
         </View>
         
-        {saleData.items.map((item, index) => (
-          <View key={index} style={styles.itemRow}>
-            <Text style={styles.itemName}>
-              {item.name}
-              {item.notes && ` (${item.notes})`}
-            </Text>
-            <Text style={styles.itemQty}>x{item.quantity}</Text>
-            <Text style={styles.itemPrice}>S/{(item.price * item.quantity).toFixed(2)}</Text>
-          </View>
-        ))}
+        {saleData.items.map((item, index) => {
+          const finalPrice = item.price;
+          const originalPrice = item.originalPrice !== undefined ? item.originalPrice : item.price;
+          const showOriginalPrice = item.hasCustomPrice && originalPrice !== finalPrice;
+          
+          return (
+            <View key={index} style={styles.itemRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemName}>
+                  {item.name}
+                  {item.notes && ` (${item.notes})`}
+                </Text>
+                {showOriginalPrice && (
+                  <Text style={styles.originalPrice}>
+                    Precio original: S/{originalPrice.toFixed(2)} x {item.quantity} = S/{(originalPrice * item.quantity).toFixed(2)}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.itemQty}>x{item.quantity}</Text>
+              <Text style={styles.itemPrice}>
+                S/{(finalPrice * item.quantity).toFixed(2)}
+              </Text>
+            </View>
+          );
+        })}
 
         <View style={styles.totalRow}>
           <Text>TOTAL</Text>

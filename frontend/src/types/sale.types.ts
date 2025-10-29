@@ -6,11 +6,14 @@ export interface ProductOrderItem {
   unitPrice: number;
   name: string;
 }
+
 export interface ProductOrder {
   productId: string;
   quantity: number;
-  unitPrice?: number;  // Make sure this matches
-  name?: string;       // Make sure this matches
+  unitPrice?: number;  
+  price?: number;
+  customPrice?: number;
+  name?: string;       
   // ... other properties
 }
 
@@ -62,6 +65,8 @@ export interface SaleData {
   products?: Array<{
     productId: string;
     quantity: number;
+    price?: number;
+    customPrice?: number;
   }>;
   services?: Array<{
     name: string;

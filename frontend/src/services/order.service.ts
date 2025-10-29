@@ -97,6 +97,8 @@ export const orderService = {
     products?: Array<{
       productId: string;
       quantity: number;
+      price?: number;
+      customPrice?: number;
     }>;
     services?: Array<{
       name: string;
@@ -107,6 +109,22 @@ export const orderService = {
     }>;
     status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
   }): Promise<Order> {
+    console.log('=== INICIO: Datos recibidos en orderService.createOrder ===');
+    console.log('Datos completos recibidos:', JSON.stringify(orderData, null, 2));
+    
+    if (orderData.products) {
+      console.log('=== PRODUCTOS ===');
+      orderData.products.forEach((p, i) => {
+        console.log(`Producto ${i + 1}:`, {
+          productId: p.productId,
+          quantity: p.quantity,
+          price: p.price,
+          customPrice: p.customPrice,
+          tieneCustomPrice: p.customPrice !== undefined,
+          esDiferente: p.customPrice !== undefined && p.customPrice !== p.price
+        });
+      });
+    }
     try {
       const token = localStorage.getItem("auth_token");
 
@@ -121,53 +139,41 @@ export const orderService = {
         throw new Error('Se requiere al menos un producto o servicio');
       }
 
-      // Build the order data object
-      const orderDataToSend = {
-        ...(orderData.clientInfo && {
-          clientInfo: {
-            name: orderData.clientInfo.name || 'Cliente Ocasional',
-            ...(orderData.clientInfo.email && { email: orderData.clientInfo.email }),
-            ...(orderData.clientInfo.phone && { phone: orderData.clientInfo.phone }),
-            ...(orderData.clientInfo.address && { address: orderData.clientInfo.address }),
-            dni: orderData.clientInfo.dni,
-            ...(orderData.clientInfo.ruc && { ruc: orderData.clientInfo.ruc })
-          }
-        }),
+      // Preparar los datos para la solicitud
+      const requestData = {
         ...(orderData.clientId && { clientId: orderData.clientId }),
-        ...(orderData.products && orderData.products.length > 0 && {
-          products: orderData.products.map(p => ({
-            productId: p.productId,
-            quantity: p.quantity
-          }))
+        ...(orderData.clientInfo && { clientInfo: orderData.clientInfo }),
+        ...(orderData.products && { 
+          products: orderData.products.map(p => {
+            const productData: any = {
+              productId: p.productId,
+              quantity: p.quantity
+            };
+            
+            // Incluir customPrice si existe
+            if (p.customPrice !== undefined) {
+              productData.customPrice = p.customPrice;
+            }
+            
+            return productData;
+          }) 
         }),
-        ...(orderData.services && orderData.services.length > 0 && {
-          services: orderData.services.map(s => ({
-            name: s.name,
-            ...(s.description && { description: s.description }),
-            price: s.price,
-            type: s.type,
-            ...(s.photoUrls && s.photoUrls.length > 0 && { photoUrls: s.photoUrls })
-          }))
-        }),
+        ...(orderData.services && { services: orderData.services }),
         status: orderData.status || 'PENDING'
       };
 
       console.group('Sending Order Data to Backend');
       console.log('Endpoint:', 'orders/create');
       console.log('Method:', 'POST');
-      console.log('Request Data:', JSON.stringify(orderDataToSend, null, 2));
+      console.log('Request Data:', JSON.stringify(requestData, null, 2));
       console.groupEnd();
 
-      const response = await api.post<Order>(
-        "orders/create",
-        orderDataToSend,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
+      const response = await api.post<Order>('orders/create', requestData, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
         }
-      );
+      });
 
       console.group("Order Created Successfully");
       console.log("Response Status:", response.status);

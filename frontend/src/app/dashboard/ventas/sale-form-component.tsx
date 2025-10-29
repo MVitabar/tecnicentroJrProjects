@@ -42,6 +42,7 @@ type CartItem = {
   // Add these to match ProductOrder
   productId?: string;
   unitPrice?: number;
+  customPrice?: number; // Precio personalizado para el producto
 };
 
 interface NewItemForm {
@@ -83,6 +84,7 @@ type SaleData = {
   products: Array<{
     productId: string;
     quantity: number;
+    customPrice?: number; // Precio personalizado opcional para el producto
   }>;
   services: Array<{
     name: string;
@@ -421,18 +423,21 @@ export function SaleForm({
       const product = products.find((p) => p.id === newItem.id);
       if (!product) return;
 
+      // Usar el precio personalizado si se ingresó, de lo contrario usar el precio del producto
+      const finalPrice = price > 0 ? price : product.price;
+      
       handleAddItem(
         {
           id: product.id,
           name: product.name,
-          price: product.price,
+          price: product.price, // Mantener el precio original
+          customPrice: finalPrice, // Usar el precio personalizado
           productId: product.id,
         },
         "product",
         notes,
         quantity,
-        [],
-        undefined // serviceType no aplica para productos
+        []
       );
     } else if (newItem.type === "service") {
       // Para servicios, generamos un ID temporal
@@ -483,12 +488,16 @@ export function SaleForm({
 
   // Agregar ítem al carrito
   const handleAddItem = (
-    item: Pick<CartItem, "id" | "name" | "price"> & { productId?: string },
+    item: Pick<CartItem, "id" | "name" | "price"> & {
+      productId?: string;
+      customPrice?: number; // Precio personalizado para el producto
+    },
     type: CartItem["type"],
     notes: string = "",
     quantity: number = 1,
     images: File[] = [],
-    serviceType?: 'REPAIR' | 'WARRANTY' // Added serviceType parameter
+    serviceType?: 'REPAIR' | 'WARRANTY', // Added serviceType parameter
+    customPrice?: number // Precio personalizado opcional
   ): void => {
     setSelectedItems((prev: CartItem[]): CartItem[] => {
       const existingItem = prev.find((i: CartItem) => {
@@ -535,13 +544,25 @@ export function SaleForm({
         });
       }
 
+      // Determinar el precio a usar: customPrice si está definido, de lo contrario usar el precio base del producto
+      const finalPrice = customPrice !== undefined && customPrice > 0 
+        ? customPrice 
+        : item.price;
+
       const newItem: CartItem = {
         ...item,
         id: item.id || `temp-${Date.now()}`,
+        price: item.price, // Mantener siempre el precio original
         quantity: quantityToAdd,
         type,
         notes: type === "service" ? notes : "",
-        ...(type === "product" && { productId: item.productId || item.id }),
+        ...(type === "product" && {
+          productId: item.productId || item.id,
+          // Guardar el precio personalizado si es diferente al precio base
+          ...(customPrice !== undefined && customPrice > 0 && customPrice !== item.price && {
+            customPrice: customPrice
+          })
+        }),
         ...(type === "service" && { images }),
         ...(type === "service" && { serviceType: serviceType || "REPAIR" }),
       } as CartItem;
@@ -596,10 +617,41 @@ export function SaleForm({
       // Procesar productos
       const productsData = selectedItems
         .filter((item) => item.type === "product")
-        .map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-        }));
+        .map((item) => {
+          // Determinar si hay un precio personalizado válido
+          const hasCustomPrice = item.customPrice !== undefined && 
+                               item.customPrice > 0 && 
+                               item.customPrice !== item.price;
+          
+          // Crear el objeto base del producto
+          const productData: any = {
+            productId: item.id,
+            quantity: item.quantity
+          };
+          
+          // Si hay un precio personalizado, lo usamos como precio final
+          if (hasCustomPrice) {
+            productData.customPrice = item.customPrice;
+            // No incluimos el precio base cuando hay un precio personalizado
+            console.log(`✅ Producto ${item.id}: Usando precio personalizado de ${item.customPrice} (precio original: ${item.price})`);
+          } else {
+            // Solo incluimos el precio base si no hay precio personalizado
+            productData.price = item.price;
+            console.log(`ℹ️ Producto ${item.id}: Usando precio base de ${item.price}`);
+          }
+          
+          console.log('📦 Producto procesado para la orden:', {
+            productId: item.id,
+            quantity: item.quantity,
+            price: hasCustomPrice ? 'Usando customPrice' : item.price,
+            customPrice: hasCustomPrice ? item.customPrice : 'No aplica',
+            originalPrice: item.price,
+            tieneCustomPrice: hasCustomPrice,
+            esDiferente: hasCustomPrice && item.customPrice !== item.price
+          });
+          
+          return productData;
+        });
 
       // Procesar servicios con subida de imágenes
       const servicesData = await Promise.all(
@@ -666,6 +718,7 @@ export function SaleForm({
           }
         : defaultClientInfo;
 
+      console.log("existe productsData:", productsData);
       const saleData = {
         clientInfo,
         products: productsData,
@@ -974,14 +1027,19 @@ const styles = StyleSheet.create({
 });
 
   const generateReceiptData = () => {
-    const items = selectedItems.map((item) => ({
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      total: item.price * item.quantity,
-      notes: item.notes || "",
-      type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
-    }));
+    const items = selectedItems.map((item) => {
+      const price = item.customPrice !== undefined ? item.customPrice : item.price;
+      return {
+        name: item.name,
+        price: price,
+        originalPrice: item.price,
+        hasCustomPrice: item.customPrice !== undefined,
+        quantity: item.quantity,
+        total: price * item.quantity,
+        notes: item.notes || "",
+        type: item.type,
+      };
+    });
 
     const subtotal = selectedItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -1028,18 +1086,28 @@ const styles = StyleSheet.create({
 
   // Generar datos para la hoja de servicio (ReceiptPDF)
   const generateServiceSheetData = () => {
-    const items = selectedItems.map((item) => ({
-      name: item.name,
-      price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
-      quantity: item.quantity,
-      notes: item.notes || "",
-      type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
-    }));
+    const items = selectedItems.map((item) => {
+      const price = item.customPrice !== undefined ? 
+        (typeof item.customPrice === "string" ? parseFloat(item.customPrice) : item.customPrice) :
+        (typeof item.price === "string" ? parseFloat(item.price) : item.price);
+      
+      return {
+        name: item.name,
+        price: price,
+        originalPrice: typeof item.price === "string" ? parseFloat(item.price) : item.price,
+        hasCustomPrice: item.customPrice !== undefined,
+        quantity: item.quantity,
+        notes: item.notes || "",
+        type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
+      };
+    });
 
-    const subtotal = selectedItems.reduce(
-      (sum, item) => sum + (typeof item.price === "string" ? parseFloat(item.price) : item.price) * item.quantity,
-      0
-    );
+    const subtotal = selectedItems.reduce((sum, item) => {
+      const price = item.customPrice !== undefined ? 
+        (typeof item.customPrice === "string" ? parseFloat(item.customPrice) : item.customPrice) :
+        (typeof item.price === "string" ? parseFloat(item.price) : item.price);
+      return sum + price * item.quantity;
+    }, 0);
     const total = subtotal;
 
     // ✅ Usar siempre los datos del cliente proporcionados por el usuario
@@ -1338,26 +1406,38 @@ const styles = StyleSheet.create({
                 </div>
 
                 <div className={newItem.type === "service" ? "space-y-4" : newItem.type === "custom" ? "space-y-4" : "grid grid-cols-2 gap-4"}>
-                  {/* ✅ Solo mostrar input de precio para servicios y personalizados */}
+                  {/* Mostrar input de precio para servicios, personalizados y productos */}
                   {(() => {
-                    const showPrice = newItem.type === "service" || newItem.type === "custom";
+                    const showPrice = newItem.type === "service" || newItem.type === "custom" || newItem.type === "product";
                     const showQuantity = newItem.type !== "service";
+                    const isProduct = newItem.type === "product";
+                    const selectedProduct = isProduct && products.find(p => p.id === newItem.id);
+                    const basePrice = selectedProduct ? selectedProduct.price : 0;
 
                     return (
                       <>
                         {showPrice && (
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">Precio</label>
+                            <div className="flex justify-between items-center">
+                              <label className="text-sm font-medium">
+                                {isProduct ? "Precio unitario" : "Precio"}
+                              </label>
+                              {isProduct && (
+                                <span className="text-xs text-muted-foreground">
+                                  S/{basePrice.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
                             <input
                               type="number"
                               name="price"
                               value={newItem.price}
                               onChange={handleNewItemChange}
                               className="w-full p-2 border rounded"
-                              placeholder="0.00"
+                              placeholder={isProduct ? `Dejar vacío para usar precio base (S/${basePrice.toFixed(2)})` : "0.00"}
                               min="0"
                               step="0.01"
-                              required
+                              required={!isProduct}
                             />
                           </div>
                         )}
@@ -1543,24 +1623,34 @@ const styles = StyleSheet.create({
                 <>
                   <div className="flex-1 overflow-auto mb-4">
                     <div className="space-y-2">
-                      {selectedItems.map((item) => (
-                        <div
-                          key={`${item.id}-${item.type}`}
-                          className="p-3 border rounded-lg flex justify-between items-center"
-                        >
-                          <div>
-                            <div className="font-medium">{item.name}</div>
-                            <div className="text-sm text-gray-500">
-                              S/{item.price.toFixed(2)} x {item.quantity} = S/
-                              {(item.price * item.quantity).toFixed(2)}
-                            </div>
-                            {item.notes && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {item.notes}
+                      {selectedItems.map((item) => {
+                        const finalPrice = item.customPrice !== undefined ? item.customPrice : item.price;
+                        const originalTotal = item.price * item.quantity;
+                        const finalTotal = finalPrice * item.quantity;
+                        
+                        return (
+                          <div
+                            key={`${item.id}-${item.type}`}
+                            className="p-3 border rounded-lg flex justify-between items-center"
+                          >
+                            <div>
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-sm text-gray-500">
+                                S/{finalPrice.toFixed(2)} x {item.quantity} = S/
+                                {finalTotal.toFixed(2)}
+                                {item.customPrice !== undefined && (
+                                  <span className="text-xs text-muted-foreground ml-2 line-through">
+                                    S/{originalTotal.toFixed(2)}
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2">
+                              {item.notes && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {item.notes}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-2">
                             {item.type !== "service" && (
                               <>
                                 <Button
@@ -1615,7 +1705,7 @@ const styles = StyleSheet.create({
                             </Button>
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </div>
 
@@ -1623,27 +1713,24 @@ const styles = StyleSheet.create({
                     <div className="flex justify-between mb-2">
                       <span>Subtotal:</span>
                       <span>
-                        S/
-                        {selectedItems
-                          .reduce(
-                            (sum, item) => sum + item.price * item.quantity,
-                            0
-                          )
-                          .toFixed(2)}
+                        S/{
+                          selectedItems.reduce((sum, item) => {
+                            const itemPrice = item.customPrice !== undefined ? item.customPrice : item.price;
+                            return sum + (itemPrice * item.quantity);
+                          }, 0).toFixed(2)
+                        }
                       </span>
                     </div>
                     <div className="flex justify-between font-medium text-lg">
                       <div className="flex justify-between w-full gap-4">
                         <span>Total:</span>
-
                         <span className="font-medium">
-                          S/
-                          {selectedItems
-                            .reduce(
-                              (sum, item) => sum + item.price * item.quantity,
-                              0
-                            )
-                            .toFixed(2)}
+                          S/{
+                            selectedItems.reduce((sum, item) => {
+                              const itemPrice = item.customPrice !== undefined ? item.customPrice : item.price;
+                              return sum + (itemPrice * item.quantity);
+                            }, 0).toFixed(2)
+                          }
                         </span>
                       </div>
                     </div>

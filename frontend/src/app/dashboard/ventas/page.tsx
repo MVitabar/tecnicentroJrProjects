@@ -157,6 +157,8 @@ export default function VentasPage() {
         products?: Array<{
           productId: string;
           quantity: number;
+          price?: number;
+          customPrice?: number;
         }>;
         services?: Array<{
           name: string;
@@ -180,10 +182,40 @@ export default function VentasPage() {
 
       // Agregar productos si existen
       if (products.length > 0) {
-        orderDataForBackend.products = products.map(product => ({
-          productId: product.productId,
-          quantity: product.quantity || 1
-        }));
+        console.log('=== PROCESANDO PRODUCTOS PARA EL BACKEND ===');
+        orderDataForBackend.products = products.map((product, index) => {
+          // Determinar si hay un precio personalizado válido
+          const hasCustomPrice = product.customPrice !== undefined && 
+                               product.customPrice > 0 && 
+                               product.customPrice !== product.price;
+          
+          // Crear el objeto base del producto
+          const productData: any = {
+            productId: product.productId,
+            quantity: product.quantity || 1
+          };
+          
+          // Si hay un precio personalizado, lo usamos como precio final
+          if (hasCustomPrice) {
+            productData.customPrice = product.customPrice;
+            console.log(`✅ [${index}] Producto ${product.productId}: Precio personalizado de ${product.customPrice}`);
+          } else if (product.price !== undefined) {
+            // Solo incluimos el precio base si no hay precio personalizado
+            productData.price = product.price;
+            console.log(`ℹ️ [${index}] Producto ${product.productId}: Precio base de ${product.price}`);
+          }
+          
+          console.log(`📤 Enviando producto al backend [${index}]:`, {
+            productId: product.productId,
+            quantity: product.quantity,
+            price: product.price,
+            customPrice: product.customPrice,
+            tieneCustomPrice: hasCustomPrice,
+            esDiferente: hasCustomPrice && product.customPrice !== product.price
+          });
+          
+          return productData;
+        });
       }
 
       // Agregar servicios si existen

@@ -20,6 +20,7 @@ export interface Product {
   updatedAt: string;
   createdById: string;
   createdBy?: User;
+  isDeleted?: boolean; // Indica si el producto ha sido eliminado lógicamente
 }
 
 export interface ProductsResponse {

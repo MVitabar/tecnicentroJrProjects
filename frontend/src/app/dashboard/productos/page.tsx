@@ -52,7 +52,7 @@ export default function ProductsPage() {
     if (profitType === 'fixed') {
       return buycost + profitValue;
     } else {
-      return buycost + (buycost * profitValue / 100);
+      return buycost / (1 - profitValue/100);
     }
   };
 

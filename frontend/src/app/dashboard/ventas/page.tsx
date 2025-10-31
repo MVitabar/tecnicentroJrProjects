@@ -34,8 +34,9 @@ export default function VentasPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Mostrar 10 elementos por página
 
-  const handleViewOrder = (orderId: string) => {
+  const handleViewOrder = (orderId: string) => {    
     const order = orders.find(o => o.id === orderId);
+    console.log("esta es la orden:", order)
     if (order) {
       setSelectedOrder(order);
       setIsDetailsOpen(true);

@@ -268,11 +268,34 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                       <tr className="border-t bg-muted/25">
                         <td colSpan={3} className="p-2 text-right font-medium">Total Productos:</td>
                         <td className="p-2 text-right font-medium">
-                          S/
-                            {(order.orderProducts || [])
-                              .reduce((sum, item) => sum + ((item.unitPrice || 0) * item.quantity), 0)
-                              .toFixed(2)
-                            }
+                          S/{
+                            (() => {
+                              const total = (order.orderProducts || []).reduce((sum, item) => {
+                                const itemPrice = item.unitPrice || getProductInfo(item)?.price || 0;
+                                const itemTotal = itemPrice * item.quantity;
+                                
+                                console.log('Product Item:', {
+                                  id: item.id,
+                                  productId: item.productId,
+                                  quantity: item.quantity,
+                                  unitPrice: item.unitPrice,
+                                  productInfo: getProductInfo(item),
+                                  calculatedPrice: itemPrice,
+                                  itemTotal: itemTotal
+                                });
+                                
+                                return sum + itemTotal;
+                              }, 0);
+                              
+                              console.log('Total Products:', {
+                                items: order.orderProducts?.length || 0,
+                                total: total.toFixed(2),
+                                orderId: order.id
+                              });
+                              
+                              return total.toFixed(2);
+                            })()
+                          }
                         </td>
                       </tr>
                     </tfoot>

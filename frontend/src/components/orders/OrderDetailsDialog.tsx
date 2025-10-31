@@ -7,9 +7,9 @@ import { productService } from "@/services/product.service";
 import Image from "next/image";
 import { Button } from "../ui/button";
 import { useEffect, useState } from "react";
-import { PDFViewer } from "@react-pdf/renderer";
+import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
 import ReceiptPDF from "@/app/dashboard/ventas/ReceiptPDF";
-import { FileText } from "lucide-react";
+import { FileText, Download, Printer } from "lucide-react";
 
 interface OrderDetailsDialogProps {
   open: boolean;
@@ -454,8 +454,36 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
       {/* Dialog para mostrar el PDF */}
       <Dialog open={showPDF} onOpenChange={setShowPDF}>
         <DialogContent className="max-w-4xl w-[90vw] h-[90vh] p-0 flex flex-col">
-          <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>Comprobante de Venta</DialogTitle>
+          <DialogHeader className="px-6 py-8 border-b flex flex-row items-center justify-between position-relative">
+            <DialogTitle>Comprobante de Venta {order?.orderNumber ? `- ${order.orderNumber}` : ''}</DialogTitle>
+            {showPDF && generateReceiptData() && (
+              <div className="flex gap-2 absolute left-6 top-14">
+                <PDFDownloadLink
+                  document={
+                    <ReceiptPDF
+                      saleData={generateReceiptData()!}
+                      businessInfo={businessInfo}
+                    />
+                  }
+                  fileName={`${order?.orderNumber || 'comprobante-venta'}.pdf`}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                >
+                  {({ loading }) => (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      {loading ? 'Generando...' : 'Descargar PDF'}
+                    </>
+                  )}
+                </PDFDownloadLink>
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir
+                </button>
+              </div>
+            )}
           </DialogHeader>
           <div className="flex-1 overflow-hidden p-0">
             {showPDF && generateReceiptData() && (

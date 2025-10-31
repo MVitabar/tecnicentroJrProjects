@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,9 @@ import { productService } from "@/services/product.service";
 import Image from "next/image";
 import { Button } from "../ui/button";
 import { useEffect, useState } from "react";
+import { PDFViewer } from "@react-pdf/renderer";
+import ReceiptPDF from "@/app/dashboard/ventas/ReceiptPDF";
+import { FileText } from "lucide-react";
 
 interface OrderDetailsDialogProps {
   open: boolean;
@@ -50,6 +53,7 @@ interface ProductMap {
 
 export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDialogProps) {
   const [productMap, setProductMap] = useState<ProductMap>({});
+  const [showPDF, setShowPDF] = useState(false);
   
   useEffect(() => {
     if (!order?.orderProducts?.length) return;
@@ -57,7 +61,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
     // Collect unique product IDs from the order
     const productIds = Array.from(new Set(
       order.orderProducts
-        .filter(item => item.productId && !productMap[item.productId])
+        .filter(item => item.productId)
         .map(item => item.productId)
     ));
 
@@ -91,17 +95,14 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
           return acc;
         }, {} as ProductMap);
 
-        setProductMap(prev => ({
-          ...prev,
-          ...newProductMap
-        }));
+        setProductMap(newProductMap);
       } catch (error) {
         console.error('Error fetching product details:', error);
       }
     };
 
     fetchProducts();
-  }, [order?.orderProducts, productMap]);
+  }, [order?.orderProducts]);
 
   const getProductInfo = (item: OrderProduct) => {
     if (item.product) {
@@ -127,6 +128,65 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
     } catch (_e) {
       return false;
     }
+  };
+
+  // Información del negocio (igual que en sale-form-component)
+  const businessInfo = {
+    name: "TECNICENTRO JR",
+    address: "Av. Principal 123, Lima, Perú",
+    phone: "+51 123 456 789",
+    email: "contacto@tecnicentrojr.com",
+    cuit: "20-12345678-9",
+    footerText: "Gracias por su compra. Vuelva pronto.",
+  };
+
+  // Función para generar datos del PDF a partir de la orden
+  const generateReceiptData = () => {
+    if (!order) return null;
+
+    const items = [];
+
+    // Agregar productos
+    if (order.orderProducts) {
+      for (const item of order.orderProducts) {
+        const productInfo = getProductInfo(item);
+        items.push({
+          name: productInfo?.name || `Producto ${item.productId?.substring(0, 6) || 'N/A'}`,
+          quantity: item.quantity,
+          price: item.unitPrice || productInfo?.price || 0,
+          type: 'product' as const,
+        });
+      }
+    }
+
+    // Agregar servicios
+    if (order.services) {
+      for (const service of order.services) {
+        items.push({
+          name: service.name,
+          quantity: 1,
+          price: service.price,
+          notes: service.description,
+          type: 'service' as const,
+        });
+      }
+    }
+
+    return {
+      customerName: order.client?.name || 'Cliente ocasional',
+      customer: {
+        documentNumber: order.client?.dni || order.client?.ruc || '',
+        documentType: order.client?.ruc ? 'ruc' : 'dni',
+        phone: order.client?.phone || '',
+        email: order.client?.email || '',
+        address: order.client?.address || '',
+      },
+      items,
+      subtotal: order.totalAmount || 0,
+      total: order.totalAmount || 0,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+    };
   };
 
   return (
@@ -350,16 +410,49 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
         </div>
         
         {/* Footer */}
-        <div className="border-t border-border p-4 flex justify-end flex-shrink-0">
+        <div className="border-t border-border p-4 flex justify-between flex-shrink-0">
+          <Button
+            variant="default"
+            onClick={() => setShowPDF(true)}
+            className="flex items-center gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Ver Comprobante
+          </Button>
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="mr-2"
           >
             Cerrar
           </Button>
         </div>
       </DialogContent>
+
+      {/* Dialog para mostrar el PDF */}
+      <Dialog open={showPDF} onOpenChange={setShowPDF}>
+        <DialogContent className="max-w-4xl w-[90vw] h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle>Comprobante de Venta</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden p-0">
+            {showPDF && generateReceiptData() && (
+              <PDFViewer
+                width="100%"
+                height="100%"
+                style={{
+                  border: "none",
+                  backgroundColor: "white",
+                }}
+              >
+                <ReceiptPDF
+                  saleData={generateReceiptData()!}
+                  businessInfo={businessInfo}
+                />
+              </PDFViewer>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

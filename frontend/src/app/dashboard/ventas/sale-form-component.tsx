@@ -11,6 +11,8 @@ import {
   XCircle,
   FileText,
   Info,
+  Printer,
+  Download,
 } from "lucide-react";
 import { uploadImages } from "@/lib/api/imageService";
 import { Progress } from "@/components/ui/progress";
@@ -19,8 +21,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { toast } from "sonner";
-import { PDFViewer } from "@react-pdf/renderer";
+import { PDFViewer, pdf, PDFDownloadLink, PDFDownloadLinkProps } from "@react-pdf/renderer";
 import ReceiptPDF from './ReceiptPDF';
+
+// Definir el tipo para los props del PDFDownloadLink
+type PDFDownloadLinkRenderProps = {
+  loading: boolean;
+  error: Error | null;
+  blob: Blob | null;
+  url: string | null;
+};
+
+// Definir el tipo para los datos de la venta
+type ReceiptData = {
+  orderId: string;
+  orderNumber?: string;
+  customerName: string;
+  customer: {
+    documentNumber: string;
+    documentType: 'dni' | 'ruc' | 'ci' | 'other';
+    phone: string;
+    email: string;
+    address: string;
+  };
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    type: 'product' | 'service';
+    notes?: string;
+  }>;
+  subtotal: number;
+  total: number;
+  paymentMethod?: string;
+  paymentReference?: string;
+};
 import { StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
 import {
   Dialog,
@@ -148,6 +183,8 @@ export function SaleForm({
     notes: "",
     images: [],
     serviceType: "REPAIR", // Default service type
+    productId: "",
+    unitPrice: 0
   });
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setNewItem((prev) => {
@@ -191,6 +228,7 @@ export function SaleForm({
     name: string;
     phone: string;
     documentNumber: string;
+    documentType?: string;
     email: string;
     address: string;
     ruc?: string; // Added RUC field
@@ -201,6 +239,7 @@ export function SaleForm({
     name: "",
     phone: "",
     documentNumber: "",
+    documentType: "dni",
     email: "",
     address: "",
     ruc: "",
@@ -262,7 +301,7 @@ export function SaleForm({
 
   // Reset completo del estado de la venta
   const resetSaleState = useCallback(() => {
-    console.log("🧹 Iniciando reset del estado de venta");
+    console.log(" Iniciando reset del estado de venta");
 
     setSelectedItems([]); // Limpiar el carrito
     setCustomerData({
@@ -298,20 +337,21 @@ export function SaleForm({
       notes: "",
       images: [],
       serviceType: "REPAIR",
+      productId: "",
+      unitPrice: 0
     });
 
-    console.log("✅ Estado de venta reseteado completamente");
+    console.log(" Estado de venta reseteado completamente");
   }, []);
 
-  // ✅ Limpiar estado cuando se abre una nueva venta
+  // Limpiar estado cuando se abre una nueva venta
   useEffect(() => {
     if (isOpen) {
-      console.log("🚪 Nueva venta abierta - limpiando estado anterior");
+      console.log(" Nueva venta abierta - limpiando estado anterior");
       resetSaleState();
       setShowUploadError(false);
     }
   }, [isOpen, resetSaleState]);
-
 
   const filteredItems = (): (Product | Service)[] => {
     if (!searchTerm.trim()) return [];
@@ -483,6 +523,8 @@ export function SaleForm({
       notes: "",
       images: [],
       serviceType: "REPAIR", // Reset service type
+      productId: "",
+      unitPrice: 0
     });
   };
 
@@ -638,14 +680,14 @@ export function SaleForm({
           if (hasCustomPrice) {
             productData.customPrice = item.customPrice;
             // No incluimos el precio base cuando hay un precio personalizado
-            console.log(`✅ Producto ${item.id}: Usando precio personalizado de ${item.customPrice} (precio original: ${item.price})`);
+            console.log(` Producto ${item.id}: Usando precio personalizado de ${item.customPrice} (precio original: ${item.price})`);
           } else {
             // Solo incluimos el precio base si no hay precio personalizado
             productData.price = item.price;
-            console.log(`ℹ️ Producto ${item.id}: Usando precio base de ${item.price}`);
+            console.log(` Producto ${item.id}: Usando precio base de ${item.price}`);
           }
           
-          console.log('📦 Producto procesado para la orden:', {
+          console.log(' Producto procesado para la orden:', {
             productId: item.id,
             quantity: item.quantity,
             price: hasCustomPrice ? 'Usando customPrice' : item.price,
@@ -737,12 +779,12 @@ export function SaleForm({
         // Guardar el orderNumber para mostrarlo en el PDF
         setOrderNumber(result.orderNumber || null);
 
-        // ✅ Mostrar el PDF solo después de que la venta se concrete exitosamente
-        console.log("✅ Venta completada - mostrando hoja de servicio");
+        // Mostrar el PDF solo después de que la venta se concrete exitosamente
+        console.log(" Venta completada - mostrando hoja de servicio");
         setShowServiceSheet(true);
 
-        // ✅ El formulario se mantiene intacto hasta que el usuario cierre el PDF
-        console.log("📋 Hoja de servicio se mostrará - el usuario decidirá cuándo cerrar");
+        // El formulario se mantiene intacto hasta que el usuario cierre el PDF
+        console.log(" Hoja de servicio se mostrará - el usuario decidirá cuándo cerrar");
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
@@ -903,133 +945,133 @@ export function SaleForm({
     </div>
   );
 
-// Registrar la imagen del logo
-const logo = '/icons/logo-jr-g.png';
+  // Registrar la imagen del logo
+  const logo = '/icons/logo-jr-g.png';
 
-// Registrar fuentes
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf', fontWeight: 400 },
-    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 700 },
-  ],
-});
+  // Registrar fuentes
+  Font.register({
+    family: 'Helvetica',
+    fonts: [
+      { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf', fontWeight: 400 },
+      { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 700 },
+    ],
+  });
 
-const styles = StyleSheet.create({
-  page: {
-    flexDirection: 'column',
-    backgroundColor: '#ffffff',
-    padding: 10,
-    fontFamily: 'Helvetica',
-    fontSize: 8,
-  },
-  receiptContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    padding: 8,
-  },
-  receipt: {
-    marginBottom: 10,
-    border: '1px solid #e2e8f0',
-    borderRadius: 3,
-    padding: 8,
-    position: 'relative',
-    fontSize: 8,
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  logo: {
-    width: '80px',
-    height: 'auto',
-    marginRight: 10,
-  },
-  headerInfo: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  header: {
-    marginBottom: 10,
-    textAlign: 'center',
-    borderBottom: '1px solid #e2e8f0',
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 10,
-    color: '#64748b',
-    marginBottom: 5,
-  },
-  section: {
-    marginBottom: 6,
-    fontSize: 8,
-  },
-  sectionTitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginBottom: 3,
-    borderBottom: '1px solid #e2e8f0',
-    paddingBottom: 2,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 3,
-    fontSize: 10,
-  },
-  col: {
-    flex: 1,
-  },
-  colRight: {
-    textAlign: 'right',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 0.5,
-    fontSize: 7,
-    lineHeight: 1.1,
-  },
-  itemName: {
-    flex: 3,
-  },
-  itemQty: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  itemPrice: {
-    flex: 2,
-    textAlign: 'right',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 4,
-    borderTop: '1px dashed #cbd5e1',
-    fontWeight: 'bold',
-    fontSize: 10,
-  },
-  footer: {
-    marginTop: 4,
-    fontSize: 6,
-    textAlign: 'center',
-    color: '#64748b',
-    paddingTop: 4,
-    borderTop: '1px solid #e2e8f0',
-  },
-  divider: {
-    borderTop: '1px dashed #cbd5e1',
-    margin: '10px 0',
-  },
-});
+  const styles = StyleSheet.create({
+    page: {
+      flexDirection: 'column',
+      backgroundColor: '#ffffff',
+      padding: 10,
+      fontFamily: 'Helvetica',
+      fontSize: 8,
+    },
+    receiptContainer: {
+      flex: 1,
+      justifyContent: 'flex-start',
+      padding: 8,
+    },
+    receipt: {
+      marginBottom: 10,
+      border: '1px solid #e2e8f0',
+      borderRadius: 3,
+      padding: 8,
+      position: 'relative',
+      fontSize: 8,
+    },
+    logoContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 10,
+    },
+    logo: {
+      width: '80px',
+      height: 'auto',
+      marginRight: 10,
+    },
+    headerInfo: {
+      flex: 1,
+      marginLeft: 10,
+    },
+    header: {
+      marginBottom: 10,
+      textAlign: 'center',
+      borderBottom: '1px solid #e2e8f0',
+      paddingBottom: 10,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      marginBottom: 5,
+    },
+    subtitle: {
+      fontSize: 10,
+      color: '#64748b',
+      marginBottom: 5,
+    },
+    section: {
+      marginBottom: 6,
+      fontSize: 8,
+    },
+    sectionTitle: {
+      fontSize: 10,
+      fontWeight: 'bold',
+      marginBottom: 3,
+      borderBottom: '1px solid #e2e8f0',
+      paddingBottom: 2,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 3,
+      fontSize: 10,
+    },
+    col: {
+      flex: 1,
+    },
+    colRight: {
+      textAlign: 'right',
+    },
+    itemRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 0.5,
+      fontSize: 7,
+      lineHeight: 1.1,
+    },
+    itemName: {
+      flex: 3,
+    },
+    itemQty: {
+      flex: 1,
+      textAlign: 'center',
+    },
+    itemPrice: {
+      flex: 2,
+      textAlign: 'right',
+    },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 8,
+      paddingTop: 4,
+      borderTop: '1px dashed #cbd5e1',
+      fontWeight: 'bold',
+      fontSize: 10,
+    },
+    footer: {
+      marginTop: 4,
+      fontSize: 6,
+      textAlign: 'center',
+      color: '#64748b',
+      paddingTop: 4,
+      borderTop: '1px solid #e2e8f0',
+    },
+    divider: {
+      borderTop: '1px dashed #cbd5e1',
+      margin: '10px 0',
+    },
+  });
 
   const generateReceiptData = () => {
     const items = selectedItems.map((item) => {
@@ -1052,7 +1094,7 @@ const styles = StyleSheet.create({
     );
     const total = subtotal;
 
-    // ✅ Usar siempre los datos del cliente proporcionados por el usuario
+    // Usar siempre los datos del cliente proporcionados por el usuario
     const customerInfo = {
       name: customerData.name || "Cliente",
       phone: customerData.phone || "999999999",
@@ -1079,64 +1121,87 @@ const styles = StyleSheet.create({
     return result;
   };
 
-  const businessInfo = {
+  // Definir el tipo BusinessInfo
+  interface BusinessInfo {
+    name: string;
+    address: string;
+    phone: string;
+    email: string;
+    ruc: string;
+    cuit: string;
+    footerText: string;
+    logo: string;
+  }
+
+  const businessInfo: BusinessInfo = {
     name: "Tecnicentro JR",
     address: "Av. Ejemplo 123, Lima, Perú",
     phone: "+51 987 654 321",
     email: "contacto@tecnicentrojr.com",
     ruc: "20123456789",
-    cuit: "20-12345678-9", // Agregado el CUIT que faltaba
+    cuit: "20-12345678-9",
     footerText: "Gracias por su compra. Vuelva pronto.",
+    logo: ""
+  };
+
+  // Función para validar y normalizar el tipo de documento
+  const getValidDocumentType = (docType: string | undefined): 'dni' | 'ruc' | 'ci' | 'other' => {
+    if (!docType) return 'dni';
+    const type = docType.toLowerCase();
+    if (['dni', 'ruc', 'ci', 'other'].includes(type)) {
+      return type as 'dni' | 'ruc' | 'ci' | 'other';
+    }
+    return 'dni'; // Valor por defecto
   };
 
   // Generar datos para la hoja de servicio (ReceiptPDF)
-  const generateServiceSheetData = () => {
-    const items = selectedItems.map((item) => {
-      const price = item.customPrice !== undefined ? 
-        (typeof item.customPrice === "string" ? parseFloat(item.customPrice) : item.customPrice) :
-        (typeof item.price === "string" ? parseFloat(item.price) : item.price);
-      
-      return {
-        name: item.name,
-        price: price,
-        originalPrice: typeof item.price === "string" ? parseFloat(item.price) : item.price,
-        hasCustomPrice: item.customPrice !== undefined,
-        quantity: item.quantity,
-        notes: item.notes || "",
-        type: item.type, // ✅ Agregar el tipo de item para verificar si hay servicios
-      };
-    });
+  const generateServiceSheetData = (): ReceiptData => {
+    // Filtrar solo items de tipo 'product' o 'service' y mapear al formato correcto
+    const items = selectedItems
+      .filter(item => item.type === 'product' || item.type === 'service')
+      .map((item) => {
+        const price = item.customPrice !== undefined ? 
+          (typeof item.customPrice === "string" ? parseFloat(item.customPrice) : item.customPrice) :
+          (typeof item.price === "string" ? parseFloat(item.price) : item.price);
+        
+        return {
+          name: item.name,
+          price: price,
+          quantity: item.quantity,
+          type: item.type as 'product' | 'service',
+          notes: item.notes || ""
+        };
+      });
 
-    const subtotal = selectedItems.reduce((sum, item) => {
-      const price = item.customPrice !== undefined ? 
-        (typeof item.customPrice === "string" ? parseFloat(item.customPrice) : item.customPrice) :
-        (typeof item.price === "string" ? parseFloat(item.price) : item.price);
-      return sum + price * item.quantity;
-    }, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal;
 
-    // ✅ Usar siempre los datos del cliente proporcionados por el usuario
+    // Obtener datos del cliente con valores por defecto
     const customerInfo = {
       name: customerData.name || "Cliente",
       phone: customerData.phone || "999999999",
       documentNumber: customerData.documentNumber || "00000000",
+      documentType: getValidDocumentType(customerData.documentType),
       email: customerData.email || "cliente@ejemplo.com",
-      address: customerData.address || "Sin dirección",
-      documentType: "DNI"
+      address: customerData.address || "Sin dirección"
     };
 
     return {
+      orderId: orderId || `temp-${Date.now()}`,
+      orderNumber: orderNumber || `TEMP-${Date.now()}`,
       customerName: customerInfo.name,
       customer: {
         documentNumber: customerInfo.documentNumber,
         documentType: customerInfo.documentType,
         phone: customerInfo.phone,
+        email: customerInfo.email,
+        address: customerInfo.address
       },
       items,
       subtotal,
       total,
-      orderId: orderId || undefined,
-      orderNumber: orderNumber || undefined,
+      paymentMethod: 'efectivo', // Valor por defecto
+      paymentReference: ''
     };
   };
 
@@ -1158,7 +1223,7 @@ const styles = StyleSheet.create({
           </div>
         </div>
 
-        {/* ✅ Contenido oculto para impresión automática (versión HTML) */}
+        {/* Contenido oculto para impresión automática (versión HTML) */}
         <div
           ref={receiptRef}
           className="hidden"
@@ -1266,7 +1331,7 @@ const styles = StyleSheet.create({
         {/* Diálogo de hoja de servicio */}
         <Dialog open={showServiceSheet} onOpenChange={(open) => {
           if (!open) {
-            console.log("🚫 Usuario cerró hoja de servicio - reseteando formulario y cerrando modal padre");
+            console.log(" Usuario cerró hoja de servicio - reseteando formulario y cerrando modal padre");
             resetSaleState(); // Reset completo cuando el usuario cierra la hoja de servicio
             setShowServiceSheet(false);
             onClose(); // Cerrar el modal padre
@@ -1274,9 +1339,74 @@ const styles = StyleSheet.create({
         }}>
           <DialogContent className="w-[98vw] max-w-[98vw] h-[98vh] max-h-[98vh] flex flex-col p-0 overflow-hidden">
             <DialogHeader className="px-6 pt-4 pb-2 border-b">
-              <DialogTitle className="text-2xl font-bold">
-                Comprobante de Venta
-              </DialogTitle>
+              <div className="flex justify-between items-center">
+                <DialogTitle className="text-2xl font-bold">
+                  Comprobante de Venta
+                </DialogTitle>
+                <div className="flex space-x-2">
+                  <PDFDownloadLink
+                    document={
+                      <ReceiptPDF
+                        saleData={generateServiceSheetData()}
+                        businessInfo={businessInfo}
+                      />
+                    }
+                    fileName={`comprobante-${new Date().toISOString().split('T')[0]}.pdf`}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                  >
+                    {({ loading }: PDFDownloadLinkRenderProps) => (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        {loading ? 'Generando...' : 'Descargar PDF'}
+                      </>
+                    )}
+                  </PDFDownloadLink>
+                  <button
+                    onClick={async () => {
+                      // Generar los datos del recibo
+                      const receiptData = generateServiceSheetData();
+                      if (!receiptData) return;
+                      
+                      try {
+                        // Importar dinámicamente el componente ReceiptThermalPDF
+                        const { default: ReceiptThermalPDF } = await import('./ReceiptThermalPDF');
+                        
+                        // Crear el PDF como un blob
+                        const blob = await pdf(
+                          <ReceiptThermalPDF 
+                            saleData={receiptData} 
+                            businessInfo={businessInfo} 
+                          />
+                        ).toBlob();
+                        
+                        // Crear una URL para el blob y abrir en una nueva pestaña
+                        const pdfUrl = URL.createObjectURL(blob);
+                        const printWindow = window.open(pdfUrl, '_blank');
+                        
+                        // Intentar abrir el diálogo de impresión después de un breve retraso
+                        if (printWindow) {
+                          setTimeout(() => {
+                            printWindow.print();
+                          }, 500);
+                        }
+                      } catch (error) {
+                        console.error('Error al generar el PDF:', error);
+                        // Usar toast de la forma correcta
+                        const { toast: showToast } = await import('@/components/ui/use-toast');
+                        showToast({
+                          title: "Error",
+                          description: "No se pudo generar el PDF para imprimir",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Imprimir
+                  </button>
+                </div>
+              </div>
             </DialogHeader>
             <div className="flex-1 overflow-hidden p-0">
               {showServiceSheet ? (

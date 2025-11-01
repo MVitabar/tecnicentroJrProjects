@@ -13,12 +13,14 @@ import {
   Info,
   Printer,
   Download,
+  AlertCircle,
 } from "lucide-react";
 import { uploadImages } from "@/lib/api/imageService";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer, pdf, PDFDownloadLink, PDFDownloadLinkProps } from "@react-pdf/renderer";
@@ -151,6 +153,7 @@ export function SaleForm({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
   const [showServiceSheet, setShowServiceSheet] = useState(false); // Para la hoja de servicio
+  const [isDniValid, setIsDniValid] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -173,6 +176,12 @@ export function SaleForm({
 
   const [showUploadError, setShowUploadError] = useState(false);
   const [forceSubmit, setForceSubmit] = useState(false);
+
+  // Estado para manejar errores de creación de orden
+  const [orderError, setOrderError] = useState<{
+    message: string;
+    code?: string;
+  } | null>(null);
 
   const [newItem, setNewItem] = useState<NewItemForm>({
     id: "",
@@ -327,6 +336,7 @@ export function SaleForm({
     setForceSubmit(false);
     setOrderId(null);
     setOrderNumber(null);
+    setOrderError(null); // Limpiar errores de orden
     // Reset newItem form
     setNewItem({
       id: "",
@@ -336,7 +346,7 @@ export function SaleForm({
       quantity: "1",
       notes: "",
       images: [],
-      serviceType: "REPAIR",
+      serviceType: "REPAIR", // Reset service type
       productId: "",
       unitPrice: 0
     });
@@ -553,7 +563,10 @@ export function SaleForm({
         return false;
       });
 
-      const quantityToAdd = Math.max(1, isNaN(quantity) ? 1 : quantity);
+      const quantityToAdd = Math.max(
+        1,
+        isNaN(quantity) ? 1 : quantity
+      );
 
       if (existingItem) {
         return prev.map((i: CartItem) => {
@@ -617,7 +630,7 @@ export function SaleForm({
   const defaultClientInfo = {
     name: "venta",
     email: "venta_cliente@example.com",
-    phone: "999999999",
+    phone: "",
     address: "Calle Falsa 123",
     dni: "11111111",
   };
@@ -647,6 +660,9 @@ export function SaleForm({
     }
 
     try {
+      // Limpiar errores previos
+      setOrderError(null);
+      
       // Iniciar estado de carga
       setUploadStatus((prev) => ({
         ...prev,
@@ -661,9 +677,7 @@ export function SaleForm({
         .filter((item) => item.type === "product")
         .map((item) => {
           // Determinar si hay un precio personalizado válido
-          const hasCustomPrice = item.customPrice !== undefined && 
-                               item.customPrice > 0 && 
-                               item.customPrice !== item.price;
+          const hasCustomPrice = item.customPrice !== undefined && item.customPrice > 0 && item.customPrice !== item.price;
           
           // Crear el objeto base del producto
           const productData: {
@@ -757,8 +771,8 @@ export function SaleForm({
       const clientInfo = (hasServices || hasProducts)
         ? {
             name: customerData.name || (hasServices ? "Venta" : "Cliente"),
-            email: customerData.email || (hasServices ? "venta@venta.com" : "cliente@ejemplo.com"),
-            phone: customerData.phone || (hasServices ? "123456789" : "999999999"),
+            email: customerData.email,
+            phone: customerData.phone,
             address: customerData.address || (hasServices ? "Venta" : "Sin dirección"),
             dni: customerData.documentNumber || (hasServices ? "11111111" : "00000000"),
             ...(customerData.ruc && { ruc: customerData.ruc }),
@@ -788,13 +802,28 @@ export function SaleForm({
       }
     } catch (error) {
       console.error("Error al procesar la venta:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Error al registrar la venta"
-      );
+      
+      // Extraer mensaje de error y código si están disponibles
+      const errorMessage = error instanceof Error ? error.message : "Error al registrar la venta";
+      const errorCode = error instanceof Error && 'code' in error ? (error as any).code : undefined;
+      
+      // Guardar el error en el estado para mostrarlo en la UI
+      setOrderError({
+        message: errorMessage,
+        code: errorCode
+      });
+      
+      // También mostrar toast para notificación inmediata
+      toast.error(errorMessage);
     } finally {
       setUploadStatus((prev) => ({ ...prev, inProgress: false }));
     }
   };
+
+  // Efecto para validar DNI cuando cambia
+  useEffect(() => {
+    setIsDniValid(customerData.documentNumber.length === 8);
+  }, [customerData.documentNumber]);
 
   // Renderizar formulario de cliente
   const renderCustomerForm = () => (
@@ -804,7 +833,10 @@ export function SaleForm({
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label htmlFor="name" className="text-foreground/90">
+          <Label 
+            htmlFor="name" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             Nombre completo
           </Label>
           <Input
@@ -813,13 +845,17 @@ export function SaleForm({
             onChange={(e) => {
               setCustomerData({ ...customerData, name: e.target.value });
             }}
-            placeholder="Nombre del cliente"
-            className="mt-1"
+            placeholder={isDniValid ? "Nombre del cliente" : "Ingrese DNI primero"}
+            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
+            disabled={!isDniValid}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email" className="text-foreground/90">
+          <Label 
+            htmlFor="email" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             Correo electrónico
           </Label>
           <Input
@@ -830,8 +866,9 @@ export function SaleForm({
               setCustomerData({ ...customerData, email: e.target.value });
               if (errors.email) setErrors({ ...errors, email: undefined });
             }}
-            placeholder="correo@ejemplo.com"
-            className="mt-1"
+            placeholder={isDniValid ? "correo@ejemplo.com" : "Ingrese DNI primero"}
+            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
+            disabled={!isDniValid}
           />
           {errors.email && (
             <p className="text-sm text-destructive mt-1.5">{errors.email}</p>
@@ -839,7 +876,10 @@ export function SaleForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone" className="text-foreground/90">
+          <Label 
+            htmlFor="phone" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             Teléfono
           </Label>
           <Input
@@ -850,8 +890,9 @@ export function SaleForm({
               setCustomerData({ ...customerData, phone: e.target.value });
               if (errors.phone) setErrors({ ...errors, phone: undefined });
             }}
-            placeholder="+51 999 999 999"
-            className="mt-1"
+            placeholder={isDniValid ? "+51 999 999 999" : "Ingrese DNI primero"}
+            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
+            disabled={!isDniValid}
           />
           {errors.phone && (
             <p className="text-sm text-destructive mt-1.5">{errors.phone}</p>
@@ -860,29 +901,43 @@ export function SaleForm({
 
         <div className="space-y-2">
           <Label htmlFor="documentNumber" className="text-foreground/90">
-            DNI
+            DNI {!isDniValid && <span className="text-muted-foreground text-xs">(Ingrese 8 dígitos para continuar)</span>}
             {selectedItems.some((item) => item.type === "service") && (
               <span className="text-destructive ml-1">*</span>
             )}
           </Label>
-          <Input
-            id="documentNumber"
-            value={customerData.documentNumber}
-            onChange={(e) => {
-              setCustomerData({ ...customerData, documentNumber: e.target.value });
-              if (errors.documentNumber) setErrors({ ...errors, documentNumber: undefined });
-            }}
-            placeholder="12345678"
-            maxLength={8}
-            className={`mt-1 ${errors.documentNumber ? "border-destructive" : ""}`}
-          />
-          {errors.documentNumber && (
+          <div className="relative">
+            <Input
+              id="documentNumber"
+              value={customerData.documentNumber}
+              onChange={(e) => {
+                // Solo permitir números
+                const value = e.target.value.replace(/\D/g, '');
+                setCustomerData({ ...customerData, documentNumber: value });
+                if (errors.documentNumber) setErrors({ ...errors, documentNumber: undefined });
+              }}
+              placeholder="12345678"
+              maxLength={8}
+              className={`mt-1 pr-10 ${errors.documentNumber ? "border-destructive" : ""}`}
+            />
+            {customerData.documentNumber.length > 0 && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                {customerData.documentNumber.length}/8
+              </span>
+            )}
+          </div>
+          {errors.documentNumber ? (
             <p className="text-sm text-destructive mt-1.5">{errors.documentNumber}</p>
-          )}
+          ) : customerData.documentNumber.length > 0 && customerData.documentNumber.length < 8 ? (
+            <p className="text-sm text-amber-500 mt-1.5">Complete los 8 dígitos del DNI para habilitar los demás campos</p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="address" className="text-foreground/90">
+          <Label 
+            htmlFor="address" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             Dirección
           </Label>
           <Input
@@ -891,13 +946,17 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, address: e.target.value })
             }
-            placeholder="Dirección del cliente"
-            className="mt-1"
+            placeholder={isDniValid ? "Dirección del cliente" : "Ingrese DNI primero"}
+            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
+            disabled={!isDniValid}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ruc" className="text-foreground/90">
+          <Label 
+            htmlFor="ruc" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             RUC (opcional)
           </Label>
           <Input
@@ -906,13 +965,17 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, ruc: e.target.value })
             }
-            placeholder="Número de RUC"
-            className="mt-1"
+            placeholder={isDniValid ? "Número de RUC" : "Ingrese DNI primero"}
+            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
+            disabled={!isDniValid}
           />
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="notes" className="text-foreground/90">
+          <Label 
+            htmlFor="notes" 
+            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+          >
             Notas adicionales
           </Label>
           <textarea
@@ -921,8 +984,9 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, notes: e.target.value })
             }
-            placeholder="Notas adicionales del cliente"
-            className="flex h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
+            placeholder={isDniValid ? "Notas adicionales del cliente" : "Ingrese DNI primero"}
+            className={`flex h-24 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1 ${!isDniValid ? 'bg-muted/20' : 'bg-background'}`}
+            disabled={!isDniValid}
           />
         </div>
       </div>
@@ -1097,9 +1161,9 @@ export function SaleForm({
     // Usar siempre los datos del cliente proporcionados por el usuario
     const customerInfo = {
       name: customerData.name || "Cliente",
-      phone: customerData.phone || "999999999",
+      phone: customerData.phone,
       documentNumber: customerData.documentNumber || "00000000",
-      email: customerData.email || "cliente@ejemplo.com",
+      email: customerData.email,
       address: customerData.address || "Sin dirección",
     };
 
@@ -1179,10 +1243,10 @@ export function SaleForm({
     // Obtener datos del cliente con valores por defecto
     const customerInfo = {
       name: customerData.name || "Cliente",
-      phone: customerData.phone || "999999999",
+      phone: customerData.phone,
       documentNumber: customerData.documentNumber || "00000000",
       documentType: getValidDocumentType(customerData.documentType),
-      email: customerData.email || "cliente@ejemplo.com",
+      email: customerData.email,
       address: customerData.address || "Sin dirección"
     };
 
@@ -1972,6 +2036,22 @@ export function SaleForm({
                               </div>
                             </div>
                           </div>
+                        )}
+                        
+                        {/* Mostrar error de creación de orden */}
+                        {orderError && (
+                          <Alert variant="destructive" className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Error al crear la orden</AlertTitle>
+                            <AlertDescription>
+                              {orderError.message}
+                              {orderError.code && (
+                                <span className="block mt-1 text-xs opacity-75">
+                                  Código: {orderError.code}
+                                </span>
+                              )}
+                            </AlertDescription>
+                          </Alert>
                         )}
                         
                         <Button

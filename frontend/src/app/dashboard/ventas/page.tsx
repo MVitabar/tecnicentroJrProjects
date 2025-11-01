@@ -244,8 +244,9 @@ export default function VentasPage() {
       return { success: true, orderId: newOrder.id, orderNumber: newOrder.orderNumber };
     } catch (error) {
       console.error('Error al crear la orden:', error);
-      toast.error(`Error al crear la orden: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-      return { success: false };
+      // No mostrar toast aquí, dejar que el componente hijo maneje el error
+      // Propagar el error para que sea manejado por el componente hijo
+      throw error;
     }
   };
 

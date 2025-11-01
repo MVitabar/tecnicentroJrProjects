@@ -195,11 +195,29 @@ export const orderService = {
         if ('response' in error && error.response) {
           const response = error.response as {
             status?: number;
-            data?: unknown;
+            data?: {
+              message?: string;
+              error?: string;
+              code?: string;
+              statusCode?: number;
+            };
           };
 
           console.error("Response Status:", response.status);
           console.error("Response Data:", response.data);
+
+          // Extraer el mensaje de error del backend
+          if (response.data?.message) {
+            const errorMessage = response.data.message;
+            const errorCode = response.data.code;
+            
+            // Crear un error personalizado con el mensaje del backend
+            const customError = new Error(errorMessage);
+            (customError as any).code = errorCode;
+            (customError as any).statusCode = response.data.statusCode || response.status;
+            
+            throw customError;
+          }
         }
       } else {
         console.error("Unknown error occurred:", error);

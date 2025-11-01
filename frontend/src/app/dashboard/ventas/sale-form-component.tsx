@@ -1314,15 +1314,6 @@ const styles = StyleSheet.create({
                 </div>
               )}
             </div>
-            <div className="p-3 border-t flex justify-center bg-gray-50">
-              <Button
-                variant="outline"
-                onClick={() => setShowServiceSheet(false)}
-                className="px-6 py-2 text-base"
-              >
-                Cerrar
-              </Button>
-            </div>
           </DialogContent>
         </Dialog>
 

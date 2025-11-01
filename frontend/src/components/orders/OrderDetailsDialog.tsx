@@ -7,8 +7,9 @@ import { productService } from "@/services/product.service";
 import Image from "next/image";
 import { Button } from "../ui/button";
 import { useEffect, useState } from "react";
-import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
+import { PDFViewer, PDFDownloadLink, pdf } from "@react-pdf/renderer";
 import ReceiptPDF from "@/app/dashboard/ventas/ReceiptPDF";
+import ReceiptThermalPDF from "@/app/dashboard/ventas/ReceiptThermalPDF";
 import { FileText, Download, Printer } from "lucide-react";
 
 interface OrderDetailsDialogProps {
@@ -172,11 +173,19 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
       }
     }
 
+    // Determinar el tipo de documento basado en los campos disponibles
+    let documentType: 'dni' | 'ruc' | 'ci' | 'other' = 'other';
+    if (order.client?.ruc) {
+      documentType = 'ruc';
+    } else if (order.client?.dni) {
+      documentType = 'dni';
+    }
+
     return {
       customerName: order.client?.name || 'Cliente ocasional',
       customer: {
         documentNumber: order.client?.dni || order.client?.ruc || '',
-        documentType: order.client?.ruc ? 'ruc' : 'dni',
+        documentType,
         phone: order.client?.phone || '',
         email: order.client?.email || '',
         address: order.client?.address || '',
@@ -476,7 +485,29 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
                   )}
                 </PDFDownloadLink>
                 <button
-                  onClick={() => window.print()}
+                  onClick={async () => {
+                    const receiptData = generateReceiptData();
+                    if (!receiptData) return;
+                    
+                    // Create the thermal PDF blob
+                    const blob = await pdf(
+                      <ReceiptThermalPDF 
+                        saleData={receiptData} 
+                        businessInfo={businessInfo} 
+                      />
+                    ).toBlob();
+                    
+                    // Create a blob URL and open in new tab for printing
+                    const pdfUrl = URL.createObjectURL(blob);
+                    const printWindow = window.open(pdfUrl, '_blank');
+                    
+                    // Try to trigger print after a short delay
+                    if (printWindow) {
+                      setTimeout(() => {
+                        printWindow.print();
+                      }, 500);
+                    }
+                  }}
                   className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Printer className="h-4 w-4 mr-2" />

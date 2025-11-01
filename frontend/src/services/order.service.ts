@@ -212,9 +212,14 @@ export const orderService = {
             const errorCode = response.data.code;
             
             // Crear un error personalizado con el mensaje del backend
-            const customError = new Error(errorMessage);
-            (customError as any).code = errorCode;
-            (customError as any).statusCode = response.data.statusCode || response.status;
+            interface CustomError extends Error {
+              code?: string;
+              statusCode?: number;
+            }
+            
+            const customError: CustomError = new Error(errorMessage);
+            customError.code = errorCode;
+            customError.statusCode = response.data.statusCode || response.status;
             
             throw customError;
           }

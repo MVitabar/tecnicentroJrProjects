@@ -9,7 +9,6 @@ import {
   ShoppingCart,
   X,
   XCircle,
-  FileText,
   Info,
   Printer,
   Download,
@@ -58,6 +57,7 @@ type ReceiptData = {
   paymentMethod?: string;
   paymentReference?: string;
 };
+
 import { StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
 import {
   Dialog,
@@ -600,9 +600,7 @@ export function SaleForm({
       }
 
       // Determinar el precio a usar: customPrice si está definido, de lo contrario usar el precio base del producto
-      const finalPrice = customPrice !== undefined && customPrice > 0 
-        ? customPrice 
-        : item.price;
+      const finalPrice = customPrice !== undefined ? customPrice : item.price;
 
       const newItem: CartItem = {
         ...item,
@@ -805,7 +803,7 @@ export function SaleForm({
       
       // Extraer mensaje de error y código si están disponibles
       const errorMessage = error instanceof Error ? error.message : "Error al registrar la venta";
-      const errorCode = error instanceof Error && 'code' in error ? (error as any).code : undefined;
+      const errorCode = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
       
       // Guardar el error en el estado para mostrarlo en la UI
       setOrderError({
@@ -1164,7 +1162,7 @@ export function SaleForm({
       phone: customerData.phone,
       documentNumber: customerData.documentNumber || "00000000",
       email: customerData.email,
-      address: customerData.address || "Sin dirección",
+      address: customerData.address || "Sin dirección"
     };
 
     const result = {
@@ -1173,7 +1171,7 @@ export function SaleForm({
         documentNumber: customerInfo.documentNumber,
         phone: customerInfo.phone,
         email: customerInfo.email,
-        address: customerInfo.address,
+        address: customerInfo.address
       },
       items,
       subtotal,
@@ -1814,7 +1812,9 @@ export function SaleForm({
                   <div className="flex-1 overflow-auto mb-4">
                     <div className="space-y-2">
                       {selectedItems.map((item) => {
-                        const finalPrice = item.customPrice !== undefined ? item.customPrice : item.price;
+                        // Precio final del ítem (usado en el cálculo del total)
+    const finalPrice = item.customPrice || item.price;
+    // Usar finalPrice en el cálculo para evitar la advertencia
                         const originalTotal = item.price * item.quantity;
                         const finalTotal = finalPrice * item.quantity;
                         

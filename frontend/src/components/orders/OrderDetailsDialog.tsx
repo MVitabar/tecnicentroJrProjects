@@ -19,6 +19,28 @@ interface OrderDetailsDialogProps {
   onOrderUpdate?: (order: Order) => void;
 }
 
+type OrderStatus = keyof typeof statusColors;
+
+const calculateOrderStatus = (order: Order): OrderStatus => {
+  // Mantener el estado actual por defecto, asegurando que sea un valor válido
+  let calculatedStatus: OrderStatus = (order.status in statusColors) 
+    ? order.status as OrderStatus 
+    : 'PENDING';
+
+  // Solo aplicar la lógica de servicios si la orden tiene servicios
+  if (order.services && order.services.length > 0) {
+    const nonCanceledServices = order.services.filter(service => service.status !== 'CANCELLED');
+    
+    if (nonCanceledServices.length > 0) {
+      calculatedStatus = nonCanceledServices.every(service => service.status === 'COMPLETED') 
+        ? 'COMPLETED' 
+        : 'PENDING';
+    }
+  }
+
+  return calculatedStatus;
+};
+
 const statusColors = {
   COMPLETED: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
@@ -205,7 +227,9 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
         <div className="px-6 pt-6 pb-2 border-b border-border flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <DialogTitle className="text-lg sm:text-xl font-semibold">Detalles de la Venta</DialogTitle>
-            <Badge className={statusColors[order.status]}>{translateServiceType(order.status)}</Badge>
+            <Badge className={statusColors[calculateOrderStatus(order)]}>
+              {translateServiceType(calculateOrderStatus(order))}
+            </Badge>
           </div>
         </div>
         

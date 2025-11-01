@@ -407,8 +407,26 @@ export default function VentasPage() {
                           icon: '✕'
                         }
                       };
-                      
-                      const status = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.PENDING;
+
+                      // Determinar el estado basado en los servicios (solo si hay servicios)
+                      let calculatedStatus = order.status; // Mantener el estado actual por defecto
+
+                      // Solo aplicar la lógica de servicios si la orden tiene servicios
+                      if (order.services && order.services.length > 0) {
+                          const nonCanceledServices = order.services.filter(service => service.status !== 'CANCELLED');
+                          
+                          if (nonCanceledServices.length > 0) {
+                              calculatedStatus = nonCanceledServices.every(service => service.status === 'COMPLETED') 
+                                  ? 'COMPLETED' 
+                                  : 'PENDING';
+                          } else {
+                              // Si todos los servicios están cancelados, mantener el estado actual
+                              calculatedStatus = order.status;
+                          }
+                      }
+
+                      // Usar el estado calculado
+                      const status = statusConfig[calculatedStatus as keyof typeof statusConfig] || statusConfig.PENDING;
                         
                       const clientName = order.client?.name || 'Sin cliente';
                       const productCount = order.orderProducts?.length || 0;

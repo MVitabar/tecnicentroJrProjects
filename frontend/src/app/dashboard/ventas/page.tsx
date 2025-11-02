@@ -402,17 +402,21 @@ export default function VentasPage() {
                           icon: '⏳'
                         },
                         CANCELLED: {
-                          text: 'Cancelado',
+                          text: 'Anulado',
                           class: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
                           icon: '✕'
                         }
                       };
 
-                      // Determinar el estado basado en los servicios (solo si hay servicios)
-                      let calculatedStatus = order.status; // Mantener el estado actual por defecto
-
-                      // Solo aplicar la lógica de servicios si la orden tiene servicios
-                      if (order.services && order.services.length > 0) {
+                      // Inicializar con el estado actual de la orden
+                      let calculatedStatus = order.status;
+                      
+                      // Si la orden está cancelada en la base de datos, mantener ese estado
+                      if (order.status === 'CANCELLED') {
+                          calculatedStatus = 'CANCELLED';
+                      } 
+                      // Solo aplicar la lógica de servicios si la orden no está cancelada
+                      else if (order.services && order.services.length > 0) {
                           const nonCanceledServices = order.services.filter(service => service.status !== 'CANCELLED');
                           
                           if (nonCanceledServices.length > 0) {

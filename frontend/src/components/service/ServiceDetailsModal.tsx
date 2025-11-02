@@ -277,7 +277,7 @@ export function ServiceDetailsModal({ service, isOpen, onClose, onStatusChange }
                   <Select 
                     value={status} 
                     onValueChange={setStatus}
-                    disabled={isLoading}
+                    disabled={isLoading || currentService.status === 'ANNULLATED'}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Seleccionar estado" />

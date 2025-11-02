@@ -2,15 +2,19 @@ import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/u
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Order, OrderProduct } from "@/services/order.service";
+import { Order, OrderProduct, orderService } from "@/services/order.service";
 import { productService } from "@/services/product.service";
+
 import Image from "next/image";
 import { Button } from "../ui/button";
 import { useEffect, useState } from "react";
 import { PDFViewer, PDFDownloadLink, pdf } from "@react-pdf/renderer";
 import ReceiptPDF from "@/app/dashboard/ventas/ReceiptPDF";
 import ReceiptThermalPDF from "@/app/dashboard/ventas/ReceiptThermalPDF";
-import { FileText, Download, Printer } from "lucide-react";
+import { FileText, Download, Printer, XCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { CancelOrderDialog } from "./CancelOrderDialog";
+import { useAuth } from "@/contexts/auth-context";
 
 interface OrderDetailsDialogProps {
   open: boolean;
@@ -22,6 +26,11 @@ interface OrderDetailsDialogProps {
 type OrderStatus = keyof typeof statusColors;
 
 const calculateOrderStatus = (order: Order): OrderStatus => {
+  // Si la orden está cancelada en la base de datos, devolver CANCELLED
+  if (order.status === 'CANCELLED') {
+    return 'CANCELLED';
+  }
+
   // Mantener el estado actual por defecto, asegurando que sea un valor válido
   let calculatedStatus: OrderStatus = (order.status in statusColors) 
     ? order.status as OrderStatus 
@@ -63,7 +72,7 @@ const translateServiceType = (type: string | undefined): string => {
     'IN_PROGRESS': 'En Progreso',
     'COMPLETED': 'Completado',
     'PENDING': 'Pendiente',
-    'CANCELLED': 'Cancelado',
+    'CANCELLED': 'anulado',
     'PAID': 'Pagado',
   };
 
@@ -74,9 +83,49 @@ interface ProductMap {
   [key: string]: { name: string; price: number; description?: string };
 }
 
-export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDialogProps) {
+export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }: OrderDetailsDialogProps) {
   const [productMap, setProductMap] = useState<ProductMap>({});
   const [showPDF, setShowPDF] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const { user, isAdmin } = useAuth();
+  const { toast } = useToast();
+
+  const handleCancelOrder = async (credentials: { email: string; password: string }) => {
+    if (!order) return;
+    
+    setIsCanceling(true);
+    try {
+      await orderService.cancelOrder(order.id, credentials);
+      
+      // Actualizar el estado local de la orden
+      const updatedOrder = { 
+        ...order, 
+        status: 'CANCELLED' as const 
+      };
+      
+      if (onOrderUpdate) {
+        onOrderUpdate(updatedOrder);
+      }
+      
+      toast({
+        title: "Orden anulada",
+        description: "La orden ha sido anulada exitosamente.",
+        variant: "default",
+      });
+      
+      setShowCancelDialog(false);
+    } catch (error) {
+      console.error("Error al anular la orden:", error);
+      toast({
+        title: "Error al anular la orden",
+        description: "Ocurrió un error al intentar anular la orden. Verifique sus credenciales e intente nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCanceling(false);
+    }
+  };
   
   useEffect(() => {
     if (!order?.orderProducts?.length) return;
@@ -469,18 +518,32 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
         </div>
         
         {/* Footer */}
-        <div className="border-t border-border p-4 flex justify-between flex-shrink-0">
-          <Button
-            variant="default"
-            onClick={() => setShowPDF(true)}
-            className="flex items-center gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Ver Comprobante
-          </Button>
+        <div className="border-t border-border p-4 flex justify-between flex-shrink-0 gap-2">
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              onClick={() => setShowPDF(true)}
+              className="flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Ver Comprobante
+            </Button>
+            {isAdmin && order.status !== 'CANCELLED' && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowCancelDialog(true)}
+                className="flex items-center gap-2"
+                disabled={isCanceling}
+              >
+                <XCircle className="h-4 w-4" />
+                Anular Orden
+              </Button>
+            )}
+          </div>
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
+            disabled={isCanceling}
           >
             Cerrar
           </Button>
@@ -562,6 +625,13 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
           </div>
         </DialogContent>
       </Dialog>
+
+      <CancelOrderDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={handleCancelOrder}
+        loading={isCanceling}
+      />
     </Dialog>
   );
 }

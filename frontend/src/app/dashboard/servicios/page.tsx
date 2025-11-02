@@ -88,6 +88,7 @@ export default function ServiciosPage() {
       case "PENDING":
         return "bg-yellow-100 text-yellow-800";
       case "CANCELLED":
+      case "ANNULLATED":
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -101,7 +102,8 @@ export default function ServiciosPage() {
       COMPLETED: "Completado",
       IN_PROGRESS: "En Progreso",
       PENDING: "Pendiente",
-      CANCELLED: "Cancelado",
+      CANCELLED: "Anulado",
+      ANNULLATED: "Anulado"
     };
     return statusMap[status] || status;
   };

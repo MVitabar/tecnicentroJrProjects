@@ -86,6 +86,11 @@ export interface Order {
   user?: UserInfo;
 }
 
+export interface CancelOrderParams {
+  email: string;
+  password: string;
+}
+
 export const orderService = {
   async updateOrderStatus(id: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID'): Promise<Order> {
     const response = await api.patch<Order>(`/orders/${id}/status`, { status });
@@ -315,6 +320,22 @@ export const orderService = {
       return response.data;
     } catch (error) {
       console.error(`Error al obtener las órdenes del usuario ${userId}:`, error);
+      throw error;
+    }
+  },
+  
+  async cancelOrder(id: string, credentials: { email: string; password: string }): Promise<Order> {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const response = await api.post<Order>(`/orders/${id}/cancel`, credentials, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Error al cancelar la orden ${id}:`, error);
       throw error;
     }
   }

@@ -47,7 +47,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   logo: {
-    width: '60px',
+    marginTop: 25,
+    width: '100px',
     height: 'auto',
   },
   businessName: {
@@ -136,7 +137,6 @@ interface BusinessInfo {
   address: string;
   phone: string;
   email: string;
-  cuit: string;
   footerText: string;
 }
 
@@ -167,6 +167,10 @@ export interface ReceiptThermalPDFProps {
     total: number;
     paymentMethod?: string;
     paymentReference?: string;
+    createdBy?: {
+      name: string;
+      email?: string;
+    };
   };
   businessInfo: BusinessInfo;
 }
@@ -175,8 +179,10 @@ const formatCurrency = (amount: number): string => {
   return `S/${amount.toFixed(2)}`;
 };
 
-const formatDate = (date: Date = new Date()): string => {
-  return format(date, "dd/MM/yyyy HH:mm", { locale: es });
+const formatDate = (date: Date = new Date()): string[] => {
+  const formattedDate = format(date, "dd 'de' MMMM 'de' yyyy", { locale: es });
+  const formattedTime = `Hora: ${format(date, "hh:mm a", { locale: es })}`;
+  return [formattedDate, formattedTime];
 };
 
 const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, businessInfo }) => {
@@ -198,25 +204,29 @@ const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, busines
             <Text style={styles.businessName}>{businessInfo.name}</Text>
             <Text style={styles.businessInfo}>{businessInfo.address}</Text>
             <Text style={styles.businessInfo}>Tel: {businessInfo.phone}</Text>
-            <Text style={styles.businessInfo}>CUIT: {businessInfo.cuit}</Text>
-            <Text style={styles.businessInfo}>{formatDate()}</Text>
-            {saleData.orderNumber && (
-              <Text style={styles.businessInfo}>Orden N°: {saleData.orderNumber}</Text>
-            )}
+            <Text style={styles.businessInfo}>
+              {formatDate().map((line, index) => (
+                <Text key={index} style={styles.businessInfo}>
+                  {line}
+                  {index < 1 && '\n'}
+                </Text>
+              ))}
+            </Text>
           </View>
 
           <View style={styles.divider} />
 
           {/* Título del comprobante */}
-          <Text style={styles.title}>COMPROBANTE DE VENTA</Text>
+          <Text style={styles.title}>NOTA DE VENTA</Text>
           <Text style={styles.subtitle}>
-            N° {saleData.orderNumber || saleData.orderId.substring(0, 8).toUpperCase()}
+            {saleData.orderNumber || saleData.orderId.substring(0, 8).toUpperCase()}
           </Text>
-          <Text style={styles.businessInfo}>
-            {formatDate(now)}
-          </Text>
-
           <View style={styles.divider} />
+
+          {/* Datos del usuario */}
+          <View style={{ marginBottom: 6 }}>
+            <Text style={styles.textBold}>Vendedor: {saleData.createdBy?.name || 'Sistema'}</Text>
+          </View>
 
           {/* Datos del cliente */}
           <View style={{ marginBottom: 6 }}>
@@ -280,10 +290,17 @@ const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, busines
             <View style={{ marginTop: 6, marginBottom: 6 }}>
               <Text style={[styles.textBold, { marginBottom: 2 }]}>DATOS DE SEGURIDAD</Text>
               <Text style={styles.textSmall}>
-                En cumplimiento con la normativa vigente, se informa que los servicios están sujetos a las condiciones generales de contratación.
+                En cumplimiento con la normativa vigente, los servicios se prestan bajo las condiciones generales de contratación. 
                 Para consultas o reclamos, comuníquese al {businessInfo.phone} o escriba a {businessInfo.email}.
               </Text>
+              <Text style={styles.textSmall}>
+                <Text style={styles.textBold}>Garantía:</Text> Las reparaciones cuentan con garantía según lo indicado; <Text style={styles.textBold}>transcurridos 30 días desde la entrega, no se aceptarán reclamos</Text> relacionados a la reparación realizada.
+              </Text>
+              <Text style={styles.textSmall}>
+                <Text style={styles.textBold}>Bienes no retirados:</Text> Los productos dejados en nuestras instalaciones deben ser retirados oportunamente. <Text style={styles.textBold}>Pasados 30 días, la empresa no asumirá responsabilidad por daños o pérdida del bien</Text>.
+              </Text>
             </View>
+
           )}
 
           {/* Pie de página */}

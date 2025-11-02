@@ -156,7 +156,6 @@ interface BusinessInfo {
   address: string;
   phone: string;
   email: string;
-  cuit: string;
   footerText: string;
 }
 
@@ -183,13 +182,17 @@ interface ReceiptPDFProps {
     total: number;
     orderId?: string;
     orderNumber?: string;
+    createdBy?: {
+      name: string;
+      email?: string;
+    };
   };
   businessInfo: BusinessInfo;
 }
 
 const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
   const currentDate = new Date();
-  const formattedDate = format(currentDate, "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es });
+  const formattedDate = format(currentDate, "dd 'de' MMMM 'de' yyyy hh:mm a", { locale: es });
 
   // Verificar si hay servicios en la venta
   const hasServices = saleData.items.some((item) => item.type === 'service');
@@ -197,6 +200,16 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
   const renderReceipt = (copy: 'CLIENTE' | 'COMERCIO') => (
     <View style={styles.receipt}>
       <Text style={styles.receiptCopy}>{copy}</Text>
+      
+      {/* Información del vendedor */}
+      {saleData.createdBy?.name && (
+        <View style={{ marginBottom: 8, borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
+          <Text style={{ fontSize: 10, color: '#4a5568' }}>Vendedor: {saleData.createdBy.name}</Text>
+          {saleData.createdBy.email && (
+            <Text style={{ fontSize: 8, color: '#718096' }}>{saleData.createdBy.email}</Text>
+          )}
+        </View>
+      )}
       
       <View style={styles.logoContainer}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -208,13 +221,15 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
           <Text style={styles.title}>{businessInfo.name}</Text>
           <Text style={styles.subtitle}>{businessInfo.address}</Text>
           <Text style={styles.subtitle}>Tel: {businessInfo.phone} | {businessInfo.email}</Text>
-          <Text style={styles.subtitle}>CUIT: {businessInfo.cuit}</Text>
           <Text style={styles.subtitle}>{formattedDate}</Text>
           {saleData.orderNumber && (
-            <Text style={styles.subtitle}>Orden N°: {saleData.orderNumber}</Text>
+            <Text style={styles.subtitle}>Nota de venta: {saleData.orderNumber}</Text>
           )}
           {saleData.orderId && !saleData.orderNumber && (
-            <Text style={styles.subtitle}>Orden N°: {saleData.orderId}</Text>
+            <Text style={styles.subtitle}>Nota de venta: {saleData.orderId}</Text>
+          )}
+          {saleData.createdBy?.name && (
+            <Text style={styles.subtitle}>Vendedor: {saleData.createdBy.name}</Text>
           )}
         </View>
       </View>

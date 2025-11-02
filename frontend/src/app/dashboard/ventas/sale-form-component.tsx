@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { uploadImages } from "@/lib/api/imageService";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,10 @@ type ReceiptData = {
   total: number;
   paymentMethod?: string;
   paymentReference?: string;
+  createdBy?: {
+    name: string;
+    email?: string;
+  };
 };
 
 import { StyleSheet, Font, Image as PDFImage } from '@react-pdf/renderer';
@@ -182,6 +187,9 @@ export function SaleForm({
     message: string;
     code?: string;
   } | null>(null);
+  
+  // Obtener información del usuario autenticado
+  const { user } = useAuth();
 
   const [newItem, setNewItem] = useState<NewItemForm>({
     id: "",
@@ -1263,7 +1271,11 @@ export function SaleForm({
       subtotal,
       total,
       paymentMethod: 'efectivo', // Valor por defecto
-      paymentReference: ''
+      paymentReference: '',
+      createdBy: user ? {
+        name: user.name || 'Usuario',
+        email: user.email
+      } : { name: 'Sistema' }
     };
   };
 

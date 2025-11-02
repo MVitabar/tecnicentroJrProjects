@@ -62,6 +62,13 @@ export interface OrderProduct {
   };
 }
 
+export interface UserInfo {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string; // Added orderNumber field
@@ -76,6 +83,7 @@ export interface Order {
   client?: Client;
   services?: Service[];
   orderProducts?: OrderProduct[];
+  user?: UserInfo;
 }
 
 export const orderService = {

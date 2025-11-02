@@ -156,10 +156,9 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
   // Información del negocio (igual que en sale-form-component)
   const businessInfo = {
     name: "TECNICENTRO JR",
-    address: "Av. Principal 123, Lima, Perú",
-    phone: "+51 123 456 789",
-    email: "contacto@tecnicentrojr.com",
-    cuit: "20-12345678-9",
+    address: "Jr Chanchamayo 650, puesto 1 y 2",
+    phone: "+51 993 485 170",
+    email: "tecnicentrojrcajamarca@gmail.com",
     footerText: "Gracias por su compra. Vuelva pronto.",
   };
 
@@ -217,6 +216,10 @@ export function OrderDetailsDialog({ open, onOpenChange, order }: OrderDetailsDi
       total: order.totalAmount || 0,
       orderId: order.id,
       orderNumber: order.orderNumber,
+      createdBy: order.user ? {
+        name: order.user.name || 'Usuario',
+        email: order.user.email
+      } : { name: 'Sistema' },
     };
   };
 

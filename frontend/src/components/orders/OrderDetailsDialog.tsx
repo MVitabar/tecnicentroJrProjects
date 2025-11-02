@@ -96,21 +96,40 @@ export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }:
     
     setIsCanceling(true);
     try {
-      await orderService.cancelOrder(order.id, credentials);
+      // 1. Primero cancelar la orden
+      const updatedOrder = await orderService.cancelOrder(order.id, credentials);
       
-      // Actualizar el estado local de la orden
-      const updatedOrder = { 
-        ...order, 
-        status: 'CANCELLED' as const 
-      };
+      // 2. Restaurar el stock de los productos
+      if (order.orderProducts && order.orderProducts.length > 0) {
+        const updatePromises = order.orderProducts.map(async (item) => {
+          try {
+            // Obtener el producto actual
+            const product = await productService.getProductById(item.productId);
+            // Calcular el nuevo stock
+            const newStock = (product.stock || 0) + item.quantity;
+            // Actualizar el stock del producto
+            await productService.updateProduct(item.productId, { stock: newStock });
+          } catch (error) {
+            console.error(`Error al actualizar el stock del producto ${item.productId}:`, error);
+            // No lanzamos el error para no interrumpir el flujo, pero lo registramos
+          }
+        });
+        
+        // Esperar a que todas las actualizaciones de stock se completen
+        await Promise.all(updatePromises);
+      }
       
+      // 3. Actualizar el estado local de la orden
       if (onOrderUpdate) {
-        onOrderUpdate(updatedOrder);
+        onOrderUpdate({
+          ...order,
+          status: 'CANCELLED' as const
+        });
       }
       
       toast({
         title: "Orden anulada",
-        description: "La orden ha sido anulada exitosamente.",
+        description: "La orden ha sido anulada exitosamente y el stock de los productos ha sido restaurado.",
         variant: "default",
       });
       

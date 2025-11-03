@@ -97,6 +97,44 @@ export const clientService = {
     }
   },
 
+  async getClientByDni(dni: string): Promise<Client | null> {
+    console.log('Buscando cliente con DNI:', dni);
+    try {
+      // Primero intentamos obtener todos los clientes y filtrar localmente
+      // ya que el endpoint de búsqueda por DNI podría no estar funcionando correctamente
+      console.log('Obteniendo todos los clientes para buscar por DNI...');
+      
+      // Usamos un límite grande para asegurarnos de obtener todos los clientes
+      const allClients = await this.getClients(1, 1000);
+      
+      // Buscamos el cliente por DNI (ignorando mayúsculas/minúsculas y espacios)
+      const foundClient = allClients.data.find(
+        client => client.dni && client.dni.toString().trim() === dni.toString().trim()
+      );
+      
+      console.log('Resultado de búsqueda local por DNI:', foundClient ? 'Encontrado' : 'No encontrado');
+      
+      return foundClient || null;
+      
+    } catch (error) {
+      const axiosError = error as AxiosError<{ message?: string }>;
+      
+      console.error('Error en getClientByDni:', {
+        dni,
+        error: axiosError.message,
+        response: axiosError.response?.data,
+        status: axiosError.response?.status,
+        url: axiosError.config?.url
+      });
+      
+      // Si hay un error, lanzamos una excepción con un mensaje descriptivo
+      throw new Error(
+        axiosError.response?.data?.message || 
+        'Error al buscar el cliente por DNI. Por favor, intente nuevamente.'
+      );
+    }
+  },
+
   async getClientById(id: string): Promise<Client> {
     console.log('Obteniendo cliente con ID:', id);
     try {

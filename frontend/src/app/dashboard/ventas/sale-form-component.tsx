@@ -25,6 +25,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { PDFViewer, pdf, PDFDownloadLink, PDFDownloadLinkProps } from "@react-pdf/renderer";
 import ReceiptPDF from './ReceiptPDF';
+import { clientService } from '@/services/client.service';
 
 // Definir el tipo para los props del PDFDownloadLink
 type PDFDownloadLinkRenderProps = {
@@ -159,6 +160,8 @@ export function SaleForm({
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
   const [showServiceSheet, setShowServiceSheet] = useState(false); // Para la hoja de servicio
   const [isDniValid, setIsDniValid] = useState(false);
+  const [isSearchingClient, setIsSearchingClient] = useState(false);
+  const [documentNumberChangedManually, setDocumentNumberChangedManually] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -264,6 +267,7 @@ export function SaleForm({
   });
 
   const [errors, setErrors] = useState<{
+    name?: string;
     email?: string;
     phone?: string;
     documentNumber?: string;
@@ -826,7 +830,101 @@ export function SaleForm({
     }
   };
 
-  // Efecto para validar DNI cuando cambia
+  // Buscar cliente por DNI con useCallback para evitar recreaciones innecesarias
+  const searchClientByDni = useCallback(async (dni: string) => {
+    if (!dni || dni.length !== 8) {
+      console.log('DNI inválido o incompleto');
+      return;
+    }
+    
+    console.log('Buscando cliente con DNI:', dni);
+    setIsSearchingClient(true);
+    
+    try {
+      const client = await clientService.getClientByDni(dni);
+      console.log('Respuesta de getClientByDni:', client);
+      
+      if (client) {
+        // Si encontramos el cliente, actualizamos los campos
+        setCustomerData(prev => ({
+          ...prev,
+          name: client.name || '',
+          email: client.email || '',
+          phone: client.phone || '',
+          address: client.address || '',
+          ruc: client.ruc || '',
+          documentNumber: dni,
+          // Mantenemos las notas existentes
+          notes: prev.notes
+        }));
+        
+        console.log('Cliente encontrado:', client);
+        toast.success('Cliente encontrado y cargado correctamente');
+      } else {
+        // Si no encontramos el cliente, limpiamos todos los campos excepto el DNI
+        setCustomerData(prev => ({
+          ...prev,
+          name: '',
+          email: '',
+          phone: '',
+          address: '',
+          ruc: '',
+          documentNumber: dni, // Mantenemos el DNI ingresado
+          // Mantenemos las notas existentes
+          notes: prev.notes
+        }));
+        
+        console.log('Cliente no encontrado');
+        toast.info('Cliente no encontrado. Complete los datos manualmente');
+      }
+    } catch (error) {
+      console.error('Error al buscar cliente:', error);
+      toast.error('Error al buscar el cliente. Verifique el DNI e intente nuevamente');
+    } finally {
+      setIsSearchingClient(false);
+      setDocumentNumberChangedManually(false);
+    }
+  }, []);
+
+  // Efecto para validar DNI y buscar cliente cuando esté completo
+  useEffect(() => {
+    let isMounted = true;
+    let timer: NodeJS.Timeout;
+
+    const searchClient = async () => {
+      if (!isMounted) return;
+      
+      const currentDni = customerData.documentNumber;
+      
+      // Solo buscar si el DNI es válido y no estamos ya buscando
+      if (currentDni.length === 8 && !isSearchingClient && documentNumberChangedManually) {
+        console.log('Iniciando búsqueda automática de cliente con DNI:', currentDni);
+        
+        try {
+          await searchClientByDni(currentDni);
+        } catch (error) {
+          console.error('Error en la búsqueda automática:', error);
+        }
+      }
+    };
+
+    // Usamos un pequeño timeout para agrupar múltiples cambios rápidos
+    if (customerData.documentNumber.length === 8) {
+      timer = setTimeout(() => {
+        if (isMounted) {
+          searchClient();
+        }
+      }, 800); // 800ms de retraso para evitar múltiples búsquedas
+    }
+
+    // Limpieza
+    return () => {
+      isMounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [customerData.documentNumber, isSearchingClient, searchClientByDni, documentNumberChangedManually]);
+
+  // Efecto para actualizar isDniValid cuando cambia el DNI
   useEffect(() => {
     setIsDniValid(customerData.documentNumber.length === 8);
   }, [customerData.documentNumber]);
@@ -841,26 +939,33 @@ export function SaleForm({
         <div className="space-y-2">
           <Label 
             htmlFor="name" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             Nombre completo
+            {selectedItems.some((item) => item.type === "service") && (
+              <span className="text-destructive ml-1">*</span>
+            )}
           </Label>
           <Input
             id="name"
             value={customerData.name}
             onChange={(e) => {
               setCustomerData({ ...customerData, name: e.target.value });
+              if (errors.name) setErrors({ ...errors, name: undefined });
             }}
-            placeholder={isDniValid ? "Nombre del cliente" : "Ingrese DNI primero"}
-            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "Ej: Juan Pérez" : "Ingrese DNI de 8 dígitos primero"}
+            disabled={!isDniValid || isSearchingClient}
+            className={errors.name ? "border-destructive" : ""}
           />
+          {errors.name && (
+            <p className="text-sm text-destructive">{errors.name}</p>
+          )}
         </div>
 
         <div className="space-y-2">
           <Label 
             htmlFor="email" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             Correo electrónico
           </Label>
@@ -872,9 +977,9 @@ export function SaleForm({
               setCustomerData({ ...customerData, email: e.target.value });
               if (errors.email) setErrors({ ...errors, email: undefined });
             }}
-            placeholder={isDniValid ? "correo@ejemplo.com" : "Ingrese DNI primero"}
-            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "correo@ejemplo.com" : "Ingrese DNI de 8 dígitos primero"}
+            disabled={!isDniValid || isSearchingClient}
+            className={errors.email ? "border-destructive" : ""}
           />
           {errors.email && (
             <p className="text-sm text-destructive mt-1.5">{errors.email}</p>
@@ -884,7 +989,7 @@ export function SaleForm({
         <div className="space-y-2">
           <Label 
             htmlFor="phone" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             Teléfono
           </Label>
@@ -896,9 +1001,9 @@ export function SaleForm({
               setCustomerData({ ...customerData, phone: e.target.value });
               if (errors.phone) setErrors({ ...errors, phone: undefined });
             }}
-            placeholder={isDniValid ? "+51 999 999 999" : "Ingrese DNI primero"}
-            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "+51 999 999 999" : "Ingrese DNI de 8 dígitos primero"}
+            disabled={!isDniValid || isSearchingClient}
+            className={errors.phone ? "border-destructive" : ""}
           />
           {errors.phone && (
             <p className="text-sm text-destructive mt-1.5">{errors.phone}</p>
@@ -907,7 +1012,7 @@ export function SaleForm({
 
         <div className="space-y-2">
           <Label htmlFor="documentNumber" className="text-foreground/90">
-            DNI {!isDniValid && <span className="text-muted-foreground text-xs">(Ingrese 8 dígitos para continuar)</span>}
+            DNI {!isDniValid && <span className="text-muted-foreground text-xs">(8 dígitos)</span>}
             {selectedItems.some((item) => item.type === "service") && (
               <span className="text-destructive ml-1">*</span>
             )}
@@ -919,13 +1024,41 @@ export function SaleForm({
               onChange={(e) => {
                 // Solo permitir números
                 const value = e.target.value.replace(/\D/g, '');
-                setCustomerData({ ...customerData, documentNumber: value });
-                if (errors.documentNumber) setErrors({ ...errors, documentNumber: undefined });
+                const newDocumentNumber = value.slice(0, 8);
+                
+                // Actualizamos el estado del DNI
+                setCustomerData(prev => ({
+                  ...prev,
+                  documentNumber: newDocumentNumber
+                }));
+                
+                // Marcamos que el usuario está realizando un cambio manual
+                setDocumentNumberChangedManually(true);
+                
+                // Limpiamos el error si existe
+                if (errors.documentNumber) {
+                  setErrors(prev => ({
+                    ...prev,
+                    documentNumber: undefined
+                  }));
+                }
               }}
               placeholder="12345678"
               maxLength={8}
-              className={`mt-1 pr-10 ${errors.documentNumber ? "border-destructive" : ""}`}
+              className={`mt-1 pr-10 ${errors.documentNumber ? "border-destructive" : ""} ${isSearchingClient ? 'opacity-70' : ''}`}
+              disabled={isSearchingClient}
+              onKeyDown={(e) => {
+                // Si presiona Enter y el DNI es válido, forzamos la búsqueda
+                if (e.key === 'Enter' && customerData.documentNumber.length === 8) {
+                  searchClientByDni(customerData.documentNumber);
+                }
+              }}
             />
+            {isSearchingClient && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              </div>
+            )}
             {customerData.documentNumber.length > 0 && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 {customerData.documentNumber.length}/8
@@ -935,14 +1068,16 @@ export function SaleForm({
           {errors.documentNumber ? (
             <p className="text-sm text-destructive mt-1.5">{errors.documentNumber}</p>
           ) : customerData.documentNumber.length > 0 && customerData.documentNumber.length < 8 ? (
-            <p className="text-sm text-amber-500 mt-1.5">Complete los 8 dígitos del DNI para habilitar los demás campos</p>
+            <p className="text-sm text-amber-500 mt-1.5">Ingrese 8 dígitos</p>
+          ) : isDniValid ? (
+            <p className="text-sm text-green-600 mt-1.5">✓ DNI válido</p>
           ) : null}
         </div>
 
         <div className="space-y-2">
           <Label 
             htmlFor="address" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             Dirección
           </Label>
@@ -952,16 +1087,15 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, address: e.target.value })
             }
-            placeholder={isDniValid ? "Dirección del cliente" : "Ingrese DNI primero"}
-            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "Dirección del cliente" : "Ingrese DNI de 8 dígitos primero"}
+            disabled={!isDniValid || isSearchingClient}
           />
         </div>
 
         <div className="space-y-2">
           <Label 
             htmlFor="ruc" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             RUC (opcional)
           </Label>
@@ -971,16 +1105,15 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, ruc: e.target.value })
             }
-            placeholder={isDniValid ? "Número de RUC" : "Ingrese DNI primero"}
-            className={`mt-1 ${!isDniValid ? 'bg-muted/20' : ''}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "Número de RUC" : "Ingrese DNI de 8 dígitos primero"}
+            disabled={!isDniValid || isSearchingClient}
           />
         </div>
 
         <div className="space-y-2 md:col-span-2">
           <Label 
             htmlFor="notes" 
-            className={`text-foreground/90 ${!isDniValid ? 'opacity-50' : ''}`}
+            className="text-foreground/90"
           >
             Notas adicionales
           </Label>
@@ -990,9 +1123,9 @@ export function SaleForm({
             onChange={(e) =>
               setCustomerData({ ...customerData, notes: e.target.value })
             }
-            placeholder={isDniValid ? "Notas adicionales del cliente" : "Ingrese DNI primero"}
-            className={`flex h-24 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1 ${!isDniValid ? 'bg-muted/20' : 'bg-background'}`}
-            disabled={!isDniValid}
+            placeholder={isDniValid ? "Notas adicionales del cliente" : "Ingrese DNI de 8 dígitos primero"}
+            className="flex h-24 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1 bg-background"
+            disabled={!isDniValid || isSearchingClient}
           />
         </div>
       </div>
@@ -1376,7 +1509,7 @@ export function SaleForm({
                     {item.name} x{item.quantity}
                   </span>
                   <span style={{ fontSize: '10px' }}>
-                    S/ {(item.price * item.quantity).toFixed(2)}
+                    S/{(item.price * item.quantity).toFixed(2)}
                   </span>
                 </div>
                 {item.notes && (
@@ -1392,7 +1525,7 @@ export function SaleForm({
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
               <span style={{ fontSize: '12px' }}>TOTAL:</span>
               <span style={{ fontSize: '12px' }}>
-                S/ {selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
+                S/{selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
               </span>
             </div>
           </div>

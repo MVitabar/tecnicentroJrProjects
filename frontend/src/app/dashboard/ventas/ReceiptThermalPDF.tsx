@@ -126,6 +126,7 @@ const styles = StyleSheet.create({
   },
   textBold: {
     fontWeight: 'bold',
+    marginVertical: 5
   },
   textSmall: {
     fontSize: 6,
@@ -173,6 +174,7 @@ export interface ReceiptThermalPDFProps {
     };
   };
   businessInfo: BusinessInfo;
+  isCompleted?: boolean;
 }
 
 const formatCurrency = (amount: number): string => {
@@ -185,8 +187,8 @@ const formatDate = (date: Date = new Date()): string[] => {
   return [formattedDate, formattedTime];
 };
 
-const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, businessInfo }) => {
-  const now = new Date();
+const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, businessInfo, isCompleted = true }) => {
+  const now = new Date();  
   const hasServices = saleData.items.some(item => item.type === 'service');
 
   return (
@@ -217,10 +219,13 @@ const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, busines
           <View style={styles.divider} />
 
           {/* Título del comprobante */}
-          <Text style={styles.title}>NOTA DE VENTA</Text>
+          {
+            (!isCompleted && hasServices) ? <Text style={styles.title}>ORDEN DE TRABAJO</Text> : <Text style={styles.title}>NOTA DE VENTA</Text>
+          }          
           <Text style={styles.subtitle}>
             {saleData.orderNumber || saleData.orderId.substring(0, 8).toUpperCase()}
           </Text>
+
           <View style={styles.divider} />
 
           {/* Datos del usuario */}
@@ -231,18 +236,61 @@ const ReceiptThermalPDF: React.FC<ReceiptThermalPDFProps> = ({ saleData, busines
           {/* Datos del cliente */}
           <View style={{ marginBottom: 6 }}>
             <Text style={styles.textBold}>Cliente: {saleData.customerName}</Text>
-            <Text>
-              {saleData.customer.documentType.toUpperCase()}: {saleData.customer.documentNumber}
-            </Text>
-            {saleData.customer.phone && (
-              <Text>Teléfono: {saleData.customer.phone}</Text>
-            )}
+            <Text>{saleData.customer.documentType.toUpperCase()}: {saleData.customer.documentNumber}</Text>
+            {
+              saleData.customer.phone && (<Text>Teléfono: {saleData.customer.phone}</Text>)
+            }
           </View>
 
           <View style={styles.divider} />
 
+          {!isCompleted  && hasServices && <View style={{ marginBottom: 6 }}>
+            <Text style={styles.textBold}>Datos de Seguridad:</Text>
+            <Text>Patron de desbloqueo:</Text>
+            <View style={{ 
+              width: '100%', 
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 4
+            }}>
+              <View style={{
+                width: 60,
+                height: 60,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: 4,
+                opacity: 0.5,
+                marginTop: 14                
+              }}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image 
+                  src={"/9-puntos.png"}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                />
+              </View>
+            </View>
+            <Text style={{
+              margin: 10
+            }}>PIN/contraseña:_____________________</Text>
+            <Text style={{
+              margin: 2
+            }}>Fecha estimada de entrega:</Text>
+            <View style={styles.divider} />
+          </View>}
+
+          
+
           {/* Lista de productos/servicios */}
           <View style={{ marginBottom: 6 }}>
+            <Text style={styles.textBold}>Detalle:</Text>
             <View style={[styles.row, { marginBottom: 2 }]}>
               <Text style={[styles.textBold, { width: 20 }]}>Cant</Text>
               <Text style={[styles.textBold, { flex: 1, marginLeft: 4 }]}>Descripción</Text>

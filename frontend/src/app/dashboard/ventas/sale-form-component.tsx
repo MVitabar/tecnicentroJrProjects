@@ -72,6 +72,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDropzone } from "react-dropzone";
+import { Order } from "@/services/order.service";
 
 type CartItem = {
   id: string;
@@ -162,6 +163,7 @@ export function SaleForm({
   const [isDniValid, setIsDniValid] = useState(false);
   const [isSearchingClient, setIsSearchingClient] = useState(false);
   const [documentNumberChangedManually, setDocumentNumberChangedManually] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -1430,110 +1432,8 @@ export function SaleForm({
           </div>
         </div>
 
-        {/* Contenido oculto para impresión automática (versión HTML) */}
-        <div
-          ref={receiptRef}
-          className="hidden"
-          style={{
-            position: 'absolute',
-            left: '-9999px',
-            top: '-9999px',
-            width: '300px', // Ancho de ticket térmico
-            padding: '10px',
-            background: 'white',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            lineHeight: '1.2',
-          }}
-        >
-          <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: '0', fontSize: '16px', fontWeight: 'bold' }}>
-              {businessInfo.name}
-            </h3>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              {businessInfo.address}
-            </p>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              Tel: {businessInfo.phone}
-            </p>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              RUC: {businessInfo.ruc}
-            </p>
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              <strong>Fecha:</strong> {new Date().toLocaleDateString('es-PE')}
-            </p>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              <strong>Hora:</strong> {new Date().toLocaleTimeString('es-PE')}
-            </p>
-            {orderNumber && (
-              <p style={{ margin: '2px 0', fontSize: '10px' }}>
-                <strong>Orden N°:</strong> {orderNumber}
-              </p>
-            )}
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
-            <p style={{ margin: '2px 0', fontSize: '10px' }}>
-              <strong>Cliente:</strong> {customerData.name || "Cliente"}
-            </p>
-            {customerData.documentNumber && (
-              <p style={{ margin: '2px 0', fontSize: '10px' }}>
-                <strong>DNI:</strong> {customerData.documentNumber}
-              </p>
-            )}
-            {customerData.phone && (
-              <p style={{ margin: '2px 0', fontSize: '10px' }}>
-                <strong>Tel:</strong> {customerData.phone}
-              </p>
-            )}
-            {customerData.email && (
-              <p style={{ margin: '2px 0', fontSize: '10px' }}>
-                <strong>Email:</strong> {customerData.email}
-              </p>
-            )}
-            {customerData.address && (
-              <p style={{ margin: '2px 0', fontSize: '10px' }}>
-                <strong>Dirección:</strong> {customerData.address}
-              </p>
-            )}
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', padding: '5px 0' }}>
-            {selectedItems.map((item) => (
-              <div key={`${item.id}-${item.type}`} style={{ marginBottom: '3px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '10px' }}>
-                    {item.name} x{item.quantity}
-                  </span>
-                  <span style={{ fontSize: '10px' }}>
-                    S/{(item.price * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-                {item.notes && (
-                  <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>
-                    {item.notes}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', padding: '5px 0', marginTop: '5px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-              <span style={{ fontSize: '12px' }}>TOTAL:</span>
-              <span style={{ fontSize: '12px' }}>
-                S/{selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '8px', color: '#666' }}>
-            {businessInfo.footerText}
-          </div>
-        </div>
+        {/* Referencia para la impresión - ya no se usa, se mantiene para compatibilidad */}
+        <div ref={receiptRef} className="hidden" />
 
         {/* Diálogo de hoja de servicio */}
         <Dialog open={showServiceSheet} onOpenChange={(open) => {
@@ -1570,27 +1470,22 @@ export function SaleForm({
                   </PDFDownloadLink>
                   <button
                     onClick={async () => {
-                      // Generar los datos del recibo
                       const receiptData = generateServiceSheetData();
                       if (!receiptData) return;
                       
                       try {
-                        // Importar dinámicamente el componente ReceiptThermalPDF
                         const { default: ReceiptThermalPDF } = await import('./ReceiptThermalPDF');
-                        
-                        // Crear el PDF como un blob
                         const blob = await pdf(
                           <ReceiptThermalPDF 
                             saleData={receiptData} 
-                            businessInfo={businessInfo} 
+                            businessInfo={businessInfo}
+                            isCompleted={orders.some(order => order.id === receiptData.orderId && order.status === 'COMPLETED')}
                           />
                         ).toBlob();
                         
-                        // Crear una URL para el blob y abrir en una nueva pestaña
                         const pdfUrl = URL.createObjectURL(blob);
                         const printWindow = window.open(pdfUrl, '_blank');
                         
-                        // Intentar abrir el diálogo de impresión después de un breve retraso
                         if (printWindow) {
                           setTimeout(() => {
                             printWindow.print();

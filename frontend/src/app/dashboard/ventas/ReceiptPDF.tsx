@@ -201,7 +201,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
     <View style={styles.receipt}>
       <Text style={styles.receiptCopy}>{copy}</Text>
       
-      {/* Información del vendedor */}
+      {/* Información del vendedor, CABECERA */}
       {saleData.createdBy?.name && (
         <View style={{ marginBottom: 8, borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
           <Text style={{ fontSize: 10, color: '#4a5568' }}>Vendedor: {saleData.createdBy.name}</Text>
@@ -214,7 +214,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
       <View style={styles.logoContainer}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image 
-          src={logo} 
+          src={logo}
           style={styles.logo}
         />
         <View style={styles.header}>
@@ -351,7 +351,7 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
                 }}>
                   {/* eslint-disable-next-line jsx-a11y/alt-text */}
                   <Image 
-                    src="/9-puntos.png"
+                    src={"/9-puntos.png"}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -378,31 +378,6 @@ const ReceiptPDF: React.FC<ReceiptPDFProps> = ({ saleData, businessInfo }) => {
         {/* Primera copia (ORIGINAL) */}
         <View style={{ marginBottom: 15 }}>
           {renderReceipt('CLIENTE')}
-        </View>
-        
-        {/* Línea divisoria */}
-        <View style={{ 
-          borderTop: '1px dashed #94a3b8', 
-          margin: '15px 0',
-          position: 'relative'
-        }}>
-          <Text style={{
-            position: 'absolute',
-            top: '-8px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: '#ffffff',
-            padding: '0 10px',
-            fontSize: 8,
-            color: '#64748b'
-          }}>
-            COPIA - COMERCIO
-          </Text>
-        </View>
-        
-        {/* Segunda copia (DUPLICADO) */}
-        <View>
-          {renderReceipt('COMERCIO')}
         </View>
       </Page>
     </Document>

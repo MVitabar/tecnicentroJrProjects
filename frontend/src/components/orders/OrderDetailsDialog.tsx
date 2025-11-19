@@ -149,7 +149,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }:
   useEffect(() => {
     if (!order?.orderProducts?.length) return;
 
-    // Collect unique product IDs from the order
+    // Recolectar IDs únicos de productos de la orden
     const productIds = Array.from(new Set(
       order.orderProducts
         .filter(item => item.productId)
@@ -158,7 +158,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }:
 
     if (productIds.length === 0) return;
 
-    // Fetch product details for all unique IDs
+    // Obtener detalles de productos para todos los IDs únicos
     const fetchProducts = async () => {
       try {
         const products = await Promise.all(
@@ -584,7 +584,7 @@ export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }:
                     />
                   }
                   fileName={`${order?.orderNumber || 'comprobante-venta'}.pdf`}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-black bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
                   {({ loading }) => (
                     <>
@@ -598,19 +598,20 @@ export function OrderDetailsDialog({ open, onOpenChange, order, onOrderUpdate }:
                     const receiptData = generateReceiptData();
                     if (!receiptData) return;
                     
-                    // Create the thermal PDF blob
+                    // Crear el blob del PDF térmico
                     const blob = await pdf(
                       <ReceiptThermalPDF 
                         saleData={receiptData} 
-                        businessInfo={businessInfo} 
+                        businessInfo={businessInfo}
+                        isCompleted={order.status === 'COMPLETED'}
                       />
                     ).toBlob();
                     
-                    // Create a blob URL and open in new tab for printing
+                    // Crear una URL del blob y abrir en una nueva pestaña para imprimir
                     const pdfUrl = URL.createObjectURL(blob);
                     const printWindow = window.open(pdfUrl, '_blank');
                     
-                    // Try to trigger print after a short delay
+                    // Intentar activar la impresión después de un breve retraso
                     if (printWindow) {
                       setTimeout(() => {
                         printWindow.print();

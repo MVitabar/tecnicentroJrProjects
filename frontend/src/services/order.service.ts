@@ -112,6 +112,10 @@ export const orderService = {
       quantity: number;
       price?: number;
       customPrice?: number;
+      payments?: Array<{
+        type: string;
+        amount: number;
+      }>;
     }>;
     services?: Array<{
       name: string;
@@ -119,6 +123,10 @@ export const orderService = {
       price: number;
       type: 'REPAIR' | 'WARRANTY'; // Updated to match backend specification
       photoUrls?: string[];
+      payments?: Array<{
+        type: string;
+        amount: number;
+      }>;
     }>;
     status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
   }): Promise<Order> {
@@ -163,6 +171,10 @@ export const orderService = {
               quantity: number;
               price?: number;
               customPrice?: number;
+              payments?: Array<{
+                type: string;
+                amount: number;
+              }>;
             } = {
               productId: p.productId,
               quantity: p.quantity
@@ -173,10 +185,50 @@ export const orderService = {
               productData.customPrice = p.customPrice;
             }
             
+            // Incluir payments si existen
+            if (p.payments && p.payments.length > 0) {
+              productData.payments = p.payments;
+            }
+            
             return productData;
           }) 
         }),
-        ...(orderData.services && { services: orderData.services }),
+        ...(orderData.services && { 
+          services: orderData.services.map(s => {
+            const serviceData: {
+              name: string;
+              description?: string;
+              price: number;
+              type: 'REPAIR' | 'WARRANTY';
+              photoUrls?: string[];
+              payments?: Array<{
+                type: string;
+                amount: number;
+              }>;
+            } = {
+              name: s.name,
+              price: s.price,
+              type: s.type
+            };
+            
+            // Incluir description si existe
+            if (s.description) {
+              serviceData.description = s.description;
+            }
+            
+            // Incluir photoUrls si existen
+            if (s.photoUrls && s.photoUrls.length > 0) {
+              serviceData.photoUrls = s.photoUrls;
+            }
+            
+            // Incluir payments si existen
+            if (s.payments && s.payments.length > 0) {
+              serviceData.payments = s.payments;
+            }
+            
+            return serviceData;
+          })
+        }),
         status: orderData.status || 'PENDING'
       };
 

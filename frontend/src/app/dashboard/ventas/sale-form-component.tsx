@@ -35,6 +35,23 @@ type PDFDownloadLinkRenderProps = {
   url: string | null;
 };
 
+// Enum para métodos de pago
+enum PaymentType {
+  EFECTIVO = 'EFECTIVO',
+  TARJETA = 'TARJETA',
+  TRANSFERENCIA = 'TRANSFERENCIA',
+  YAPE = 'YAPE',
+  PLIN = 'PLIN',
+  OTRO = 'OTRO'
+}
+
+// Tipo para método de pago individual
+type PaymentMethod = {
+  id: string;
+  type: PaymentType;
+  amount: number;
+};
+
 // Definir el tipo para los datos de la venta
 type ReceiptData = {
   orderId: string;
@@ -73,6 +90,7 @@ import {
 } from "@/components/ui/dialog";
 import { useDropzone } from "react-dropzone";
 import { Order } from "@/services/order.service";
+import { PaymentConfirmationDialog } from "@/components/ui/payment-confirmation-dialog";
 
 type CartItem = {
   id: string;
@@ -87,6 +105,7 @@ type CartItem = {
   productId?: string;
   unitPrice?: number;
   customPrice?: number; // Precio personalizado para el producto
+  paymentMethods: PaymentMethod[]; // Métodos de pago para el ítem
 };
 
 interface NewItemForm {
@@ -101,7 +120,8 @@ interface NewItemForm {
   // Add these to match ProductOrder
   productId?: string;
   unitPrice?: number;
-}
+  paymentMethods: PaymentMethod[]; // Métodos de pago para el ítem
+};
 
 type Service = {
   id: string;
@@ -137,6 +157,7 @@ type SaleData = {
     type: "REPAIR" | "WARRANTY"; // Updated to match backend specification
     photoUrls: string[];
   }>;
+  totalAmount: number; // Monto total confirmado basado en métodos de pago
 };
 
 // Mantenemos el tipo CartItem para el estado del carrito
@@ -192,7 +213,34 @@ export function SaleForm({
     message: string;
     code?: string;
   } | null>(null);
-  
+
+  // Estado para el modal de confirmación de pago
+  const [paymentConfirmation, setPaymentConfirmation] = useState<{
+    isOpen: boolean;
+    itemName: string;
+    expectedTotal: number;
+    paymentTotal: number;
+    pendingItem: {
+      item: Pick<CartItem, "id" | "name" | "price"> & {
+        productId?: string;
+        customPrice?: number;
+      };
+      type: CartItem["type"];
+      notes: string;
+      quantity: number;
+      images: File[];
+      serviceType?: 'REPAIR' | 'WARRANTY';
+      customPrice?: number;
+      paymentMethods: PaymentMethod[];
+    } | null;
+  }>({
+    isOpen: false,
+    itemName: "",
+    expectedTotal: 0,
+    paymentTotal: 0,
+    pendingItem: null,
+  });
+
   // Obtener información del usuario autenticado
   const { user } = useAuth();
 
@@ -206,7 +254,12 @@ export function SaleForm({
     images: [],
     serviceType: "REPAIR", // Default service type
     productId: "",
-    unitPrice: 0
+    unitPrice: 0,
+    paymentMethods: [{
+      id: "1",
+      type: PaymentType.EFECTIVO,
+      amount: 0
+    }]
   });
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setNewItem((prev) => {
@@ -362,7 +415,12 @@ export function SaleForm({
       images: [],
       serviceType: "REPAIR", // Reset service type
       productId: "",
-      unitPrice: 0
+      unitPrice: 0,
+      paymentMethods: [{
+        id: "1",
+        type: PaymentType.EFECTIVO,
+        amount: 0
+      }]
     });
 
     console.log(" Estado de venta reseteado completamente");
@@ -404,14 +462,73 @@ export function SaleForm({
 
   // Manejar selección de ítem
   const handleItemSelect = (item: Product | Service) => {
-    setNewItem((prev) => ({
-      ...prev,
-      id: item.id,
-      name: item.name,
-      price: item.price.toString(),
-    }));
+    setNewItem((prev) => {
+      const updated = {
+        ...prev,
+        id: item.id,
+        name: item.name,
+        price: item.price.toString(),
+      };
+      
+      // Si es un producto, configurar payment automático de EFECTIVO
+      if ("stock" in item) { // Es un producto
+        updated.paymentMethods = [{
+          id: "1",
+          type: PaymentType.EFECTIVO,
+          amount: item.price
+        }];
+      }
+      
+      return updated;
+    });
     setSearchTerm(""); // Limpiar búsqueda
     setIsDropdownOpen(false);
+  };
+
+  // Manejar foco en el campo de búsqueda
+  const handleFocus = () => {
+    if (newItem.type === "product") {
+      setSearchTerm(newItem.name);
+      setIsDropdownOpen(!!newItem.name);
+    }
+  };
+
+  // Funciones para manejar métodos de pago
+  const addPaymentMethod = () => {
+    setNewItem(prev => ({
+      ...prev,
+      paymentMethods: [
+        ...prev.paymentMethods,
+        {
+          id: Date.now().toString(),
+          type: PaymentType.EFECTIVO,
+          amount: 0
+        }
+      ]
+    }));
+  };
+
+  const removePaymentMethod = (id: string) => {
+    if (newItem.paymentMethods.length > 1) {
+      setNewItem(prev => ({
+        ...prev,
+        paymentMethods: prev.paymentMethods.filter(pm => pm.id !== id)
+      }));
+    }
+  };
+
+  const updatePaymentMethod = (id: string, field: 'type' | 'amount', value: PaymentType | number) => {
+    setNewItem(prev => ({
+      ...prev,
+      paymentMethods: prev.paymentMethods.map(pm => 
+        pm.id === id ? { ...pm, [field]: value } : pm
+      )
+    }));
+  };
+
+  // Eliminar ítem del carrito
+  const removeItem = (id: string) => {
+    setSelectedItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   // Manejar cambios en el formulario
@@ -446,23 +563,20 @@ export function SaleForm({
 
       if (name === "name" && prev.type === "product") {
         setIsDropdownOpen(!!value);
+        
+        // Si es un producto y se encuentra en la lista, configurar payment automático
+        const product = products.find(p => p.id === value);
+        if (product && prev.paymentMethods.length === 1 && prev.paymentMethods[0].amount === 0) {
+          newState.paymentMethods = [{
+            id: "1",
+            type: PaymentType.EFECTIVO,
+            amount: product.price
+          }];
+        }
       }
 
       return newState;
     });
-  };
-
-  // Manejar foco en el campo de búsqueda
-  const handleFocus = () => {
-    if (newItem.type === "product") {
-      setSearchTerm(newItem.name);
-      setIsDropdownOpen(!!newItem.name);
-    }
-  };
-
-  // Eliminar ítem del carrito
-  const removeItem = (id: string): void => {
-    setSelectedItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   // Agregar ítem personalizado
@@ -482,6 +596,76 @@ export function SaleForm({
     // Para servicios, la cantidad siempre debe ser 1
     const finalQuantity = newItem.type === "service" ? 1 : quantity;
 
+    // Calcular total esperado y total de métodos de pago
+    const expectedTotal = price * finalQuantity;
+    const paymentTotal = newItem.paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+
+    // Si los montos no coinciden, mostrar modal de confirmación
+    if (expectedTotal !== paymentTotal) {
+      // Preparar el ítem pendiente para confirmación
+      let pendingItem;
+      
+      if (newItem.type === "product") {
+        const product = products.find((p) => p.id === newItem.id);
+        if (!product) return;
+        
+        pendingItem = {
+          item: {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            productId: product.id,
+          },
+          type: "product" as const,
+          notes,
+          quantity,
+          images: [],
+          customPrice: price > 0 ? price : undefined,
+          paymentMethods: newItem.paymentMethods,
+        };
+      } else if (newItem.type === "service") {
+        pendingItem = {
+          item: {
+            id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: newItem.name,
+            price: price,
+          },
+          type: "service" as const,
+          notes,
+          quantity: finalQuantity,
+          images,
+          serviceType: newItem.serviceType || "REPAIR",
+          paymentMethods: newItem.paymentMethods,
+        };
+      } else {
+        // Ítem personalizado
+        pendingItem = {
+          item: {
+            id: `custom-${Date.now()}`,
+            name: newItem.name,
+            price: price,
+          },
+          type: "custom" as const,
+          notes,
+          quantity,
+          images: [],
+          paymentMethods: newItem.paymentMethods,
+        };
+      }
+
+      // Mostrar modal de confirmación
+      setPaymentConfirmation({
+        isOpen: true,
+        itemName: newItem.name,
+        expectedTotal,
+        paymentTotal,
+        pendingItem,
+      });
+      
+      return; // No continuar con el agregado hasta confirmar
+    }
+
+    // Si los montos coinciden, agregar directamente
     if (newItem.type === "product") {
       // Para productos, necesitamos el ID del producto
       const product = products.find((p) => p.id === newItem.id);
@@ -501,7 +685,10 @@ export function SaleForm({
         "product",
         notes,
         quantity,
-        []
+        [],
+        undefined,
+        undefined,
+        newItem.paymentMethods // Pasar métodos de pago del formulario
       );
     } else if (newItem.type === "service") {
       // Para servicios, generamos un ID temporal
@@ -519,7 +706,9 @@ export function SaleForm({
         notes,
         finalQuantity,
         images,
-        newItem.serviceType || "REPAIR" // serviceType del formulario
+        newItem.serviceType || "REPAIR", // serviceType del formulario
+        undefined,
+        newItem.paymentMethods // Pasar métodos de pago del formulario
       );
     } else {
       // Para ítems personalizados
@@ -533,7 +722,9 @@ export function SaleForm({
         notes,
         quantity,
         [],
-        undefined // serviceType no aplica para personalizados
+        undefined, // serviceType no aplica para personalizados
+        undefined,
+        newItem.paymentMethods // Pasar métodos de pago del formulario
       );
     }
 
@@ -548,7 +739,12 @@ export function SaleForm({
       images: [],
       serviceType: "REPAIR", // Reset service type
       productId: "",
-      unitPrice: 0
+      unitPrice: 0,
+      paymentMethods: [{
+        id: "1",
+        type: PaymentType.EFECTIVO,
+        amount: 0
+      }]
     });
   };
 
@@ -563,7 +759,8 @@ export function SaleForm({
     quantity: number = 1,
     images: File[] = [],
     serviceType?: 'REPAIR' | 'WARRANTY', // Added serviceType parameter
-    customPrice?: number // Precio personalizado opcional
+    customPrice?: number, // Precio personalizado opcional
+    paymentMethods: PaymentMethod[] = [] // Métodos de pago del formulario
   ): void => {
     setSelectedItems((prev: CartItem[]): CartItem[] => {
       const existingItem = prev.find((i: CartItem) => {
@@ -596,6 +793,7 @@ export function SaleForm({
             ...i,
             quantity: i.quantity + quantityToAdd,
             notes: type === "service" ? notes || i.notes || "" : i.notes,
+            paymentMethods: paymentMethods, // Usar el parámetro paymentMethods
           };
 
           if (type === "service" && images.length > 0) {
@@ -616,13 +814,14 @@ export function SaleForm({
       // Determinar el precio a usar: customPrice si está definido, de lo contrario usar el precio base del producto
       const finalPrice = customPrice !== undefined ? customPrice : item.price;
 
-      const newItem: CartItem = {
+      const cartItem: CartItem = {
         ...item,
         id: item.id || `temp-${Date.now()}`,
         price: item.price, // Mantener siempre el precio original
         quantity: quantityToAdd,
         type,
         notes: type === "service" ? notes : "",
+        paymentMethods: paymentMethods, // Usar el parámetro paymentMethods
         ...(type === "product" && {
           productId: item.productId || item.id,
           // Guardar el precio personalizado si es diferente al precio base
@@ -634,7 +833,104 @@ export function SaleForm({
         ...(type === "service" && { serviceType: serviceType || "REPAIR" }),
       } as CartItem;
 
-      return [...prev, newItem];
+      return [...prev, cartItem];
+    });
+  };
+
+  // Funciones para manejar la confirmación del modal de pago
+  const handlePaymentConfirmation = () => {
+    if (!paymentConfirmation.pendingItem) return;
+
+    const { pendingItem } = paymentConfirmation;
+    
+    // Usar el total de métodos de pago como precio confirmado
+    const confirmedPrice = paymentConfirmation.paymentTotal;
+
+    // Agregar el ítem con el precio confirmado
+    if (pendingItem.type === "product") {
+      handleAddItem(
+        {
+          ...pendingItem.item,
+          price: pendingItem.item.price, // Mantener precio original
+          customPrice: confirmedPrice, // Usar precio confirmado
+          productId: pendingItem.item.productId,
+        },
+        pendingItem.type,
+        pendingItem.notes,
+        pendingItem.quantity,
+        pendingItem.images,
+        undefined,
+        confirmedPrice, // Precio personalizado confirmado
+        pendingItem.paymentMethods
+      );
+    } else if (pendingItem.type === "service") {
+      handleAddItem(
+        {
+          ...pendingItem.item,
+          price: confirmedPrice, // Para servicios, reemplazar el precio
+        },
+        pendingItem.type,
+        pendingItem.notes,
+        pendingItem.quantity,
+        pendingItem.images,
+        pendingItem.serviceType,
+        confirmedPrice, // Precio confirmado
+        pendingItem.paymentMethods
+      );
+    } else {
+      // Ítem personalizado
+      handleAddItem(
+        {
+          ...pendingItem.item,
+          price: confirmedPrice, // Reemplazar el precio
+        },
+        pendingItem.type,
+        pendingItem.notes,
+        pendingItem.quantity,
+        pendingItem.images,
+        undefined,
+        confirmedPrice, // Precio confirmado
+        pendingItem.paymentMethods
+      );
+    }
+
+    // Cerrar modal y reiniciar formulario
+    setPaymentConfirmation({
+      isOpen: false,
+      itemName: "",
+      expectedTotal: 0,
+      paymentTotal: 0,
+      pendingItem: null,
+    });
+
+    // Reiniciar formulario del nuevo ítem
+    setNewItem({
+      id: "",
+      type: newItem.type, // Mantener el tipo seleccionado
+      name: "",
+      price: "",
+      quantity: "1",
+      notes: "",
+      images: [],
+      serviceType: "REPAIR",
+      productId: "",
+      unitPrice: 0,
+      paymentMethods: [{
+        id: "1",
+        type: PaymentType.EFECTIVO,
+        amount: 0
+      }]
+    });
+  };
+
+  const handlePaymentCancel = () => {
+    // Cerrar modal sin agregar el ítem
+    setPaymentConfirmation({
+      isOpen: false,
+      itemName: "",
+      expectedTotal: 0,
+      paymentTotal: 0,
+      pendingItem: null,
     });
   };
 
@@ -688,97 +984,71 @@ export function SaleForm({
       const productsData = selectedItems
         .filter((item) => item.type === "product")
         .map((item) => {
-          // Determinar si hay un precio personalizado válido
           const hasCustomPrice = item.customPrice !== undefined && item.customPrice > 0 && item.customPrice !== item.price;
+          const finalPrice = hasCustomPrice ? item.customPrice! : item.price;
           
-          // Crear el objeto base del producto
-          const productData: {
-            productId: string;
-            quantity: number;
-            price?: number;
-            customPrice?: number;
-          } = {
-            productId: item.id,
-            quantity: item.quantity
-          };
-          
-          // Si hay un precio personalizado, lo usamos como precio final
-          if (hasCustomPrice) {
-            productData.customPrice = item.customPrice;
-            // No incluimos el precio base cuando hay un precio personalizado
-            console.log(` Producto ${item.id}: Usando precio personalizado de ${item.customPrice} (precio original: ${item.price})`);
-          } else {
-            // Solo incluimos el precio base si no hay precio personalizado
-            productData.price = item.price;
-            console.log(` Producto ${item.id}: Usando precio base de ${item.price}`);
-          }
-          
-          console.log(' Producto procesado para la orden:', {
+          // Usar los métodos de pago del formulario
+          const payments = item.paymentMethods.map(pm => ({
+            type: pm.type,
+            amount: pm.amount
+          }));
+
+          return {
             productId: item.id,
             quantity: item.quantity,
-            price: hasCustomPrice ? 'Usando customPrice' : item.price,
-            customPrice: hasCustomPrice ? item.customPrice : 'No aplica',
-            originalPrice: item.price,
-            tieneCustomPrice: hasCustomPrice,
-            esDiferente: hasCustomPrice && item.customPrice !== item.price
-          });
-          
-          return productData;
+            ...(hasCustomPrice ? { customPrice: item.customPrice } : { price: item.price }),
+            payments
+          };
         });
 
-      // Procesar servicios con subida de imágenes
+      // Procesar servicios
       const servicesData = await Promise.all(
         selectedItems
           .filter((item) => item.type === "service")
           .map(async (item) => {
             let photoUrls: string[] = [];
-
             if (item.images?.length) {
-              const result = await uploadImages(
-                item.images,
-                ({ total, completed }) => {
-                  const progress = Math.round((completed / total) * 100);
-                  setUploadStatus((prev) => ({
-                    ...prev,
-                    progress,
-                  }));
-                }
-              );
-
+              const result = await uploadImages(item.images, ({ total, completed }) => {
+                setUploadStatus((prev) => ({ ...prev, progress: Math.round((completed / total) * 100) }));
+              });
               if (result.failed.length > 0 && !forceSubmit) {
-                setUploadStatus((prev) => ({
-                  ...prev,
-                  error: `No se pudieron cargar ${result.failed.length} imágenes`,
-                  failedFiles: result.failed,
-                }));
+                setUploadStatus((prev) => ({ ...prev, error: `No se pudieron cargar ${result.failed.length} imágenes`, failedFiles: result.failed }));
                 setShowUploadError(true);
                 throw new Error("Error al subir imágenes");
               }
-
               photoUrls = result.urls;
             }
+            // Usar los métodos de pago del formulario
+            const payments = item.paymentMethods.map(pm => ({
+              type: pm.type,
+              amount: pm.amount
+            }));
 
             return {
               name: item.name,
               description: item.notes || "Sin descripción",
-              price:
-                typeof item.price === "string"
-                  ? parseFloat(item.price)
-                  : item.price,
+              price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
               type: (item.serviceType as 'REPAIR' | 'WARRANTY' || "REPAIR"),
               photoUrls,
+              payments
             };
           })
       );
 
       // Validar que haya al menos un producto o servicio
       if (productsData.length === 0 && servicesData.length === 0) {
-        toast.error(
-          "La venta debe incluir al menos un producto o servicio válido"
-        );
+        toast.error("La venta debe incluir al menos un producto o servicio válido");
         return;
       }
 
+      // Generar DNI único para ventas de productos si no se ingresó
+      let finalDni = customerData.documentNumber;
+      if (!finalDni && hasProducts && !hasServices) {
+        // Generar DNI único con timestamp para evitar colisiones
+        const timestamp = Date.now().toString().slice(-6);
+        finalDni = `00${timestamp}`;
+      }
+      
       // Usar los datos del cliente si hay servicios o productos, de lo contrario usar los valores por defecto
       const clientInfo = (hasServices || hasProducts)
         ? {
@@ -786,16 +1056,24 @@ export function SaleForm({
             email: customerData.email,
             phone: customerData.phone,
             address: customerData.address || (hasServices ? "Venta" : "Sin dirección"),
-            dni: customerData.documentNumber || (hasServices ? "11111111" : "00000000"),
+            dni: finalDni || (hasServices ? "11111111" : "00000000"),
             ...(customerData.ruc && { ruc: customerData.ruc }),
           }
         : defaultClientInfo;
 
       console.log("existe productsData:", productsData);
+      
+      // Calcular el totalAmount basado en la suma de métodos de pago de todos los ítems
+      const totalAmount = selectedItems.reduce((sum, item) => {
+        const itemPaymentTotal = item.paymentMethods.reduce((paymentSum, pm) => paymentSum + pm.amount, 0);
+        return sum + itemPaymentTotal;
+      }, 0);
+      
       const saleData = {
         clientInfo,
         products: productsData,
         services: servicesData,
+        totalAmount, // Agregar el monto total confirmado
       };
 
       console.log("Enviando datos de venta:", saleData);
@@ -816,8 +1094,16 @@ export function SaleForm({
       console.error("Error al procesar la venta:", error);
       
       // Extraer mensaje de error y código si están disponibles
-      const errorMessage = error instanceof Error ? error.message : "Error al registrar la venta";
-      const errorCode = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+      let errorMessage = error instanceof Error ? error.message : "Error al registrar la venta";
+      let errorCode = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+      
+      // Manejar específicamente el error de DNI duplicado
+      if (errorMessage.includes('Unique constraint failed on the fields: (`dni`)') || 
+          errorMessage.includes('duplicate key') ||
+          errorCode === 'DNI_ALREADY_EXISTS') {
+        errorMessage = 'El DNI 00000000 esta reservado para clientes por defecto. Ingrese un DNI diferente o deje el campo vacío para generar uno automáticamente.';
+        errorCode = 'DNI_ALREADY_EXISTS';
+      }
       
       // Guardar el error en el estado para mostrarlo en la UI
       setOrderError({
@@ -1633,10 +1919,10 @@ export function SaleForm({
                   </div>
                 </div>
 
-                <div className={newItem.type === "service" ? "space-y-4" : newItem.type === "custom" ? "space-y-4" : "grid grid-cols-2 gap-4"}>
-                  {/* Mostrar input de precio para servicios, personalizados y productos */}
+                {/* Campos de precio y cantidad con métodos de pago */}
+                <div className="space-y-4">
                   {(() => {
-                    const showPrice = newItem.type === "service" || newItem.type === "custom" || newItem.type === "product";
+                    const showPrice = newItem.type === "service" || newItem.type === "custom";
                     const showQuantity = newItem.type !== "service";
                     const isProduct = newItem.type === "product";
                     const selectedProduct = isProduct && products.find(p => p.id === newItem.id);
@@ -1644,46 +1930,108 @@ export function SaleForm({
 
                     return (
                       <>
-                        {showPrice && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <label className="text-sm font-medium">
-                                {isProduct ? "Precio unitario" : "Precio"}
-                              </label>
-                              {isProduct && (
-                                <span className="text-xs text-muted-foreground">
-                                  S/{basePrice.toFixed(2)}
-                                </span>
-                              )}
+                        {/* Campos de precio y cantidad en una fila */}
+                        <div className="grid grid-cols-2 gap-4">
+                          {showPrice && (
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium">
+                                  {isProduct ? "Precio unitario" : "Precio"}
+                                </label>
+                                {isProduct && (
+                                  <span className="text-xs text-muted-foreground">
+                                    S/{basePrice.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                              <input
+                                type="number"
+                                name="price"
+                                value={newItem.price}
+                                onChange={handleNewItemChange}
+                                className="w-full p-2 border rounded"
+                                placeholder={isProduct ? `Dejar vacío para usar precio base (S/${basePrice.toFixed(2)})` : "0.00"}
+                                min="0"
+                                step="0.01"
+                                required={!isProduct}
+                              />
                             </div>
-                            <input
-                              type="number"
-                              name="price"
-                              value={newItem.price}
-                              onChange={handleNewItemChange}
-                              className="w-full p-2 border rounded"
-                              placeholder={isProduct ? `Dejar vacío para usar precio base (S/${basePrice.toFixed(2)})` : "0.00"}
-                              min="0"
-                              step="0.01"
-                              required={!isProduct}
-                            />
-                          </div>
-                        )}
+                          )}
 
-                        {showQuantity && (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Cantidad</label>
-                            <input
-                              type="number"
-                              name="quantity"
-                              value={newItem.quantity}
-                              onChange={handleNewItemChange}
-                              className="w-full p-2 border rounded"
-                              min="1"
-                              required
-                            />
+                          {showQuantity && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Cantidad</label>
+                              <input
+                                type="number"
+                                name="quantity"
+                                value={newItem.quantity}
+                                onChange={handleNewItemChange}
+                                className="w-full p-2 border rounded"
+                                min="1"
+                                required
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Métodos de pago */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Métodos de pago</label>
+                            <button
+                              type="button"
+                              onClick={addPaymentMethod}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Agregar método
+                            </button>
                           </div>
-                        )}
+                          
+                          <div className="space-y-2">
+                            {newItem.paymentMethods.map((paymentMethod, index) => (
+                              <div key={paymentMethod.id} className="flex gap-2">
+                                <select
+                                  value={paymentMethod.type}
+                                  onChange={(e) => updatePaymentMethod(paymentMethod.id, 'type', e.target.value as PaymentType)}
+                                  className="flex-1 p-2 border rounded text-sm text-[#a3a3a3]"
+                                >
+                                  <option value={PaymentType.EFECTIVO}>Efectivo</option>
+                                  <option value={PaymentType.TARJETA}>Tarjeta</option>
+                                  <option value={PaymentType.TRANSFERENCIA}>Transferencia</option>
+                                  <option value={PaymentType.YAPE}>Yape</option>
+                                  <option value={PaymentType.PLIN}>Plin</option>
+                                  <option value={PaymentType.OTRO}>Otro</option>
+                                </select>
+                                
+                                <input
+                                  type="number"
+                                  value={paymentMethod.amount}
+                                  onChange={(e) => updatePaymentMethod(paymentMethod.id, 'amount', parseFloat(e.target.value) || 0)}
+                                  className="w-24 p-2 border rounded text-sm"
+                                  placeholder="Monto"
+                                  min="0"
+                                  step="0.01"
+                                />
+                                
+                                {newItem.paymentMethods.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removePaymentMethod(paymentMethod.id)}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                  >
+                                    <Minus className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Total de métodos de pago */}
+                          <div className="text-xs text-muted-foreground text-right">
+                            Total métodos de pago: S/{newItem.paymentMethods.reduce((sum, pm) => sum + pm.amount, 0).toFixed(2)}
+                          </div>
+                        </div>
                       </>
                     );
                   })()}
@@ -1716,7 +2064,6 @@ export function SaleForm({
                       >
                         <option value="REPAIR">Reparación</option>
                         <option value="WARRANTY">Garantía</option>
-                        
                       </select>
                     </div>
 
@@ -1853,8 +2200,8 @@ export function SaleForm({
                     <div className="space-y-2">
                       {selectedItems.map((item) => {
                         // Precio final del ítem (usado en el cálculo del total)
-    const finalPrice = item.customPrice || item.price;
-    // Usar finalPrice en el cálculo para evitar la advertencia
+                        const finalPrice = item.customPrice || item.price;
+                        // Usar finalPrice en el cálculo para evitar la advertencia
                         const originalTotal = item.price * item.quantity;
                         const finalTotal = finalPrice * item.quantity;
                         
@@ -2123,6 +2470,16 @@ export function SaleForm({
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación de pago */}
+      <PaymentConfirmationDialog
+        isOpen={paymentConfirmation.isOpen}
+        onClose={handlePaymentCancel}
+        onConfirm={handlePaymentConfirmation}
+        itemName={paymentConfirmation.itemName}
+        expectedTotal={paymentConfirmation.expectedTotal}
+        paymentTotal={paymentConfirmation.paymentTotal}
+      />
     </div>
   );
 }

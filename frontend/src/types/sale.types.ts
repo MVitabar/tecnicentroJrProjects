@@ -67,6 +67,10 @@ export interface SaleData {
     quantity: number;
     price?: number;
     customPrice?: number;
+    payments?: Array<{
+      type: string;
+      amount: number;
+    }>;
   }>;
   services?: Array<{
     name: string;
@@ -74,6 +78,10 @@ export interface SaleData {
     price: number;
     type: 'REPAIR' | 'WARRANTY'; // Updated to match backend
     photoUrls?: string[];
+    payments?: Array<{
+      type: string;
+      amount: number;
+    }>;
   }>;
   status?: string;
   paymentMethod?: string;

@@ -137,6 +137,10 @@ export default function VentasPage() {
             price: number;
             type: 'REPAIR' | 'WARRANTY';
             photoUrls?: string[];
+            payments?: Array<{
+              type: string;
+              amount: number;
+            }>;
           }> 
         : [];
 
@@ -160,6 +164,10 @@ export default function VentasPage() {
           quantity: number;
           price?: number;
           customPrice?: number;
+          payments?: Array<{
+            type: string;
+            amount: number;
+          }>;
         }>;
         services?: Array<{
           name: string;
@@ -167,6 +175,10 @@ export default function VentasPage() {
           price: number;
           type: 'REPAIR' | 'WARRANTY';
           photoUrls?: string[];
+          payments?: Array<{
+            type: string;
+            amount: number;
+          }>;
         }>;
         status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'PAID';
       } = {
@@ -196,6 +208,10 @@ export default function VentasPage() {
             quantity: number;
             price?: number;
             customPrice?: number;
+            payments?: Array<{
+              type: string;
+              amount: number;
+            }>;
           } = {
             productId: product.productId,
             quantity: product.quantity || 1
@@ -209,6 +225,12 @@ export default function VentasPage() {
             // Solo incluimos el precio base si no hay precio personalizado
             productData.price = product.price;
             console.log(`ℹ️ [${index}] Producto ${product.productId}: Precio base de ${product.price}`);
+          }
+
+          // Incluir métodos de pago si existen
+          if (product.payments && product.payments.length > 0) {
+            productData.payments = product.payments;
+            console.log(`💳 [${index}] Producto ${product.productId}: Métodos de pago:`, product.payments);
           }
           
           console.log(`📤 Enviando producto al backend [${index}]:`, {
@@ -231,7 +253,9 @@ export default function VentasPage() {
           ...(service.description && { description: service.description }),
           price: service.price || 0,
           type: getValidServiceType(service.type),
-          ...(service.photoUrls && service.photoUrls.length > 0 && { photoUrls: service.photoUrls })
+          ...(service.photoUrls && service.photoUrls.length > 0 && { photoUrls: service.photoUrls }),
+          // Incluir métodos de pago si existen
+          ...(service.payments && service.payments.length > 0 && { payments: service.payments })
         }));
       }
 
